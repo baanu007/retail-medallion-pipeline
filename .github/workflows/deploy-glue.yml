@@ -165,14 +165,20 @@ jobs:
                   "NumberOfWorkers": cfg["workers"],
                   "WorkerType": "G.1X",
               }
+              def _update_in_place():
+                  update_body = {k: v for k, v in body.items() if k != "Name"}
+                  glue.update_job(JobName=name, JobUpdate=update_body)
+                  print(f"  UPDATED: {name}")
+
               try:
                   glue.create_job(**body)
                   print(f"  CREATED: {name}")
               except glue.exceptions.AlreadyExistsException:
-                  # Update in place
-                  update_body = {k: v for k, v in body.items() if k != "Name"}
-                  glue.update_job(JobName=name, JobUpdate=update_body)
-                  print(f"  UPDATED: {name}")
+                  _update_in_place()
+              except glue.exceptions.IdempotentParameterMismatchException:
+                  # Glue returns this when the job already exists with
+                  # different params — treat the same as AlreadyExists.
+                  _update_in_place()
               except Exception as e:
                   print(f"  ERROR:   {name} — {e}")
                   raise
