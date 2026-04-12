@@ -1,0 +1,343 @@
+name: CI — lint + syntax + Streamlit tests
+
+# Runs on every push and every pull request. No AWS secrets required.
+#
+# Checks performed:
+#   1. Python syntax compile of every .py file in the repo
+#   2. Lint with ruff (fast, zero-config)
+#   3. JSON validation on any glue_jobs/**/_deploy/*.json configs
+#   4. Streamlit AppTest smoke run on each dashboard page (no S3 access —
+#      we monkeypatch the data loader so the pages just need to parse)
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch: {}
+
+jobs:
+  lint-and-syntax:
+    name: Lint + syntax
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install ruff
+        run: pip install "ruff>=0.4"
+
+      - name: Ruff check (repo-wide)
+        run: |
+          # Non-fatal for now; CI reports issues but doesn't block.
+          # Turn into `ruff check .` to enforce strict mode.
+          ruff check . --output-format=github --exit-zero
+
+      - name: py_compile all Python files
+        run: |
+          python - <<'PY'
+          import py_compile, pathlib, sys
+          errs = []
+          for p in pathlib.Path('.').rglob('*.py'):
+              if any(part in {'.venv', 'venv', '__pycache__', '.git'} for part in p.parts):
+                  continue
+              try:
+                  py_compile.compile(str(p), doraise=True)
+              except py_compile.PyCompileError as e:
+                  errs.append(f"{p}: {e}")
+          if errs:
+              print("Syntax errors:")
+              for e in errs:
+                  print(" -", e)
+              sys.exit(1)
+          print("All Python files compiled cleanly.")
+          PY
+
+  json-validation:
+    name: Validate JSON configs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate every JSON file
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys
+          errs = []
+          for p in pathlib.Path('.').rglob('*.json'):
+              if any(part in {'.venv', 'venv', 'node_modules', '.git'} for part in p.parts):
+                  continue
+              try:
+                  json.loads(p.read_text(encoding='utf-8'))
+              except Exception as e:
+                  errs.append(f"{p}: {e}")
+          if errs:
+              print("JSON errors:")
+              for e in errs:
+                  print(" -", e)
+              sys.exit(1)
+          print("All JSON files valid.")
+          PY
+
+  requirements-check:
+    name: Dashboard requirements.txt is valid
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: pip check
+        run: |
+          python -m pip install --upgrade pip
+          # Dry-run install to verify the dependencies resolve cleanly
+          pip install --dry-run -r dashboard/requirements.txt
+
+  streamlit-apptest:
+    name: Streamlit page imports (AppTest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dashboard deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r dashboard/requirements.txt
+
+      - name: Run Streamlit AppTest with mocked data loader
+        run: |
+          cd dashboard
+          python - <<'PY'
+          """
+          AppTest smoke test for all 8 pages.
+
+          We monkeypatch lib.data.get_table and lib.data.query_large so that the
+          pages can render without hitting AWS. Real end-to-end tests require
+          AWS secrets and happen in deploy-glue.yml.
+          """
+          import sys, os, warnings
+          warnings.filterwarnings('ignore')
+          sys.path.insert(0, '.')
+
+          # --- Mock the data loader BEFORE Streamlit imports it ---
+          import pandas as pd
+          from unittest.mock import patch
+
+          SAMPLE_TABLES = {
+              "dim_customer": pd.DataFrame({
+                  "user_id": ["u1", "u2", "u3"],
+                  "first_order_date": pd.to_datetime(["2023-01-01"]*3),
+                  "last_order_date": pd.to_datetime(["2023-06-01"]*3),
+                  "tenure_days": [150, 100, 50],
+                  "total_orders": [5, 3, 1],
+                  "total_spend": [250.0, 120.0, 30.0],
+                  "avg_order_value": [50.0, 40.0, 30.0],
+                  "is_loyalty": [True, False, False],
+                  "primary_restaurant_id": ["r1"]*3,
+                  "clv_tier": ["High", "Medium", "Low"],
+                  "gold_ingestion_ts": ["2026-04-11T00:00:00Z"]*3,
+              }),
+              "gold_rfm_segments": pd.DataFrame({
+                  "user_id": ["u1", "u2", "u3"],
+                  "is_loyalty": [True, False, False],
+                  "recency_days": [10, 50, 200],
+                  "frequency": [10, 3, 1],
+                  "monetary": [500.0, 120.0, 30.0],
+                  "r_score": [5, 3, 1],
+                  "f_score": [5, 3, 1],
+                  "m_score": [5, 3, 1],
+                  "rfm_score": ["555", "333", "111"],
+                  "segment": ["VIP", "Regular", "Churn Risk"],
+                  "gold_ingestion_ts": ["2026-04-11T00:00:00Z"]*3,
+              }),
+              "gold_churn_indicators": pd.DataFrame({
+                  "user_id": ["u1", "u2"],
+                  "total_orders": [5, 3],
+                  "first_order_date": pd.to_datetime(["2023-01-01"]*2),
+                  "last_order_date": pd.to_datetime(["2023-12-01"]*2),
+                  "recent_spend": [50.0, 30.0],
+                  "prior_avg_spend": [45.0, 40.0],
+                  "avg_gap_days": [30.0, 20.0],
+                  "days_since_last_order": [15, 60],
+                  "churn_tag": ["Active", "At Risk"],
+                  "churn_tag_personal": ["Active", "Inactive"],
+                  "spend_change_pct": [11.1, -25.0],
+                  "gold_ingestion_ts": ["2026-04-11T00:00:00Z"]*2,
+              }),
+              "gold_loyalty_comparison": pd.DataFrame({
+                  "segment": ["Loyalty", "Non-Loyalty", "Anonymous"],
+                  "customer_count": [5000, 15000, 0],
+                  "order_count": [30000, 90000, 12000],
+                  "total_revenue": [450000.0, 1400000.0, 180000.0],
+                  "avg_spend_per_order": [15.0, 15.5, 15.2],
+                  "avg_orders_per_customer": [6.0, 6.0, None],
+                  "avg_customer_spend": [90.0, 93.0, None],
+                  "repeat_customer_rate_pct": [60.0, 47.0, None],
+                  "option_attach_rate_pct": [32.0, 33.0, 30.0],
+                  "gold_ingestion_ts": ["2026-04-11T00:00:00Z"]*3,
+              }),
+              "gold_location_perf": pd.DataFrame({
+                  "restaurant_id": ["r1", "r2"],
+                  "total_orders": [20000, 10000],
+                  "unique_customers": [5000, 2500],
+                  "total_revenue": [300000.0, 150000.0],
+                  "avg_order_value": [15.0, 15.0],
+                  "active_weeks": [200, 150],
+                  "first_order_date": pd.to_datetime(["2020-01-01"]*2),
+                  "last_order_date": pd.to_datetime(["2024-01-01"]*2),
+                  "orders_per_week": [100.0, 66.7],
+                  "revenue_per_week": [1500.0, 1000.0],
+                  "loyalty_order_pct": [25.0, 20.0],
+                  "repeat_customer_count": [2500, 1200],
+                  "retention_rate_pct": [50.0, 48.0],
+                  "revenue_rank": [1, 2],
+                  "orders_rank": [1, 2],
+                  "customers_rank": [1, 2],
+                  "gold_ingestion_ts": ["2026-04-11T00:00:00Z"]*2,
+              }),
+              "gold_upsell_summary": pd.DataFrame([{
+                  "total_option_rows": 190000,
+                  "free_option_rows": 125000,
+                  "paid_option_rows": 65000,
+                  "free_option_pct": 65.9,
+                  "paid_option_pct": 34.1,
+                  "total_option_revenue": 85000.0,
+                  "total_orders": 130000,
+                  "orders_with_paid_options": 42000,
+                  "order_upsell_rate_pct": 32.3,
+                  "total_order_revenue": 2146000.0,
+                  "upsell_share_of_revenue_pct": 3.97,
+                  "avg_option_revenue_per_upsell_order": 2.0,
+                  "gold_ingestion_ts": "2026-04-11T00:00:00Z",
+              }]),
+              "gold_upsell_top_options": pd.DataFrame({
+                  "option_group_name": ["Breakfast Burrito Options", "Smoothie Add-ons"],
+                  "option_name": ["Add Smokehouse Bacon", "Add Protein"],
+                  "attach_count": [1900, 2700],
+                  "total_revenue": [3400.0, 2700.0],
+                  "avg_price": [1.8, 1.0],
+                  "gold_ingestion_ts": ["2026-04-11T00:00:00Z"]*2,
+              }),
+              "gold_sales_daily": pd.DataFrame({
+                  "order_date": pd.to_datetime(["2023-01-01", "2023-01-02"]),
+                  "restaurant_id": ["r1", "r1"],
+                  "item_category": ["Breakfast", "Lunch"],
+                  "order_count": [100, 80],
+                  "unique_customers": [90, 75],
+                  "total_item_revenue": [1500.0, 1200.0],
+                  "loyalty_line_items": [20, 15],
+                  "avg_order_revenue": [15.0, 15.0],
+                  "snapshot_year": [2023, 2023],
+                  "gold_ingestion_ts": ["2026-04-11T00:00:00Z"]*2,
+              }),
+              "gold_sales_weekly": pd.DataFrame({
+                  "order_year": [2023, 2023],
+                  "order_week": [1, 2],
+                  "restaurant_id": ["r1", "r1"],
+                  "order_count": [500, 550],
+                  "unique_customers": [450, 500],
+                  "total_revenue": [7500.0, 8250.0],
+                  "avg_order_value": [15.0, 15.0],
+                  "loyalty_orders": [100, 120],
+                  "gold_ingestion_ts": ["2026-04-11T00:00:00Z"]*2,
+              }),
+              "gold_sales_monthly": pd.DataFrame({
+                  "order_year": [2023, 2023],
+                  "order_month": [1, 2],
+                  "order_year_month": ["2023-01", "2023-02"],
+                  "restaurant_id": ["r1", "r1"],
+                  "order_count": [2000, 2200],
+                  "unique_customers": [1800, 2000],
+                  "total_revenue": [30000.0, 33000.0],
+                  "avg_order_value": [15.0, 15.0],
+                  "loyalty_orders": [400, 440],
+                  "total_option_revenue": [1000.0, 1100.0],
+                  "gold_ingestion_ts": ["2026-04-11T00:00:00Z"]*2,
+              }),
+          }
+
+          def _fake_get_table(name):
+              if name in SAMPLE_TABLES:
+                  return SAMPLE_TABLES[name].copy()
+              raise KeyError(f"No mock data for {name}")
+
+          def _fake_query_large(sql):
+              # Return the union of every column any page's query expects
+              if "customers_scored" in sql or "MAX(cumulative_spend)" in sql:
+                  return pd.DataFrame([{
+                      "customers_scored": 20000,
+                      "earliest_date": pd.to_datetime("2020-04-21").date(),
+                      "latest_date": pd.to_datetime("2024-02-21").date(),
+                      "max_clv": 5000.0,
+                      "median_clv_latest": 85.0,
+                  }])
+              return pd.DataFrame({
+                  "date_key": pd.to_datetime(["2023-01-01", "2023-01-02", "2023-01-03"]*3),
+                  "clv_tier": ["High", "Medium", "Low"] * 3,
+                  "median_spend": [100.0, 50.0, 20.0] * 3,
+                  "p75_spend":    [150.0, 75.0, 30.0] * 3,
+                  "p25_spend":    [ 80.0, 40.0, 15.0] * 3,
+                  "cust_count":     [1000, 3000, 1000] * 3,
+                  "customer_count": [1000, 3000, 1000] * 3,
+                  "daily_revenue": [10.0, 5.0, 2.0] * 3,
+                  "daily_order_count": [1, 1, 1] * 3,
+                  "cumulative_spend": [100.0, 50.0, 20.0] * 3,
+                  "cumulative_orders": [1, 1, 1] * 3,
+                  "days_since_first_order": [0, 1, 2] * 3,
+                  "is_active_day": [True, False, False] * 3,
+                  "snapshot_year": [2023] * 9,
+              })
+
+          # Patch BEFORE AppTest runs the page
+          patcher1 = patch("lib.data.get_table", side_effect=_fake_get_table)
+          patcher2 = patch("lib.data.query_large", side_effect=_fake_query_large)
+          patcher1.start()
+          patcher2.start()
+
+          from streamlit.testing.v1 import AppTest
+          pages = [
+              ("app.py", "Home"),
+              ("pages/1_CLV_Snapshot.py", "CLV Snapshot"),
+              ("pages/2_RFM_Segments.py", "RFM Segments"),
+              ("pages/3_Churn_Indicators.py", "Churn Indicators"),
+              ("pages/4_Sales_Trends.py", "Sales Trends"),
+              ("pages/5_Loyalty_Comparison.py", "Loyalty Comparison"),
+              ("pages/6_Location_Performance.py", "Location Performance"),
+              ("pages/7_Upsell_Analysis.py", "Upsell Analysis"),
+          ]
+          failed = []
+          for path, label in pages:
+              try:
+                  at = AppTest.from_file(path, default_timeout=60)
+                  at.run()
+                  errs = list(at.exception)
+                  if errs:
+                      failed.append((label, errs[0].message[:200]))
+                      print(f"  FAIL: {label} — {errs[0].message[:150]}")
+                  else:
+                      print(f"  OK:   {label}")
+              except Exception as e:
+                  failed.append((label, str(e)[:200]))
+                  print(f"  FAIL: {label} — {e}")
+          patcher1.stop()
+          patcher2.stop()
+          if failed:
+              print(f"\n{len(failed)} pages failed.")
+              sys.exit(1)
+          print(f"\nAll {len(pages)} pages OK.")
+          PY

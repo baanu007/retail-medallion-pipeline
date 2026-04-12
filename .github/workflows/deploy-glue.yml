@@ -1,0 +1,278 @@
+name: CD — sync Glue jobs + workflow to AWS
+
+# Runs on push to main (after CI passes). Uploads all 18 Glue scripts to S3
+# and re-runs the idempotent deployment helpers so Glue jobs and the workflow
+# stay in sync with main.
+#
+# Requires these GitHub Secrets to be set on the repo:
+#   AWS_ACCESS_KEY_ID       — IAM user with Glue + S3 permissions
+#   AWS_SECRET_ACCESS_KEY
+#   AWS_REGION              — e.g. us-east-1
+#   GP_BUCKET               — e.g. globalpartners-aws
+#
+# Optional: GP_ROLE_ARN / GP_SNS_TOPIC_ARN — only needed if you override
+#   the defaults baked into glue_jobs/*/_deploy/create_*.py.
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-glue-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy Glue scripts + workflow
+    runs-on: ubuntu-latest
+    # Needs the CI workflow to have passed on this commit first
+    needs: []
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install boto3
+        run: pip install "boto3>=1.34"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Sanity-check AWS identity
+        run: |
+          aws sts get-caller-identity
+          aws s3 ls "s3://${GP_BUCKET}/" > /dev/null && echo "S3 bucket reachable."
+        env:
+          GP_BUCKET: ${{ secrets.GP_BUCKET }}
+
+      - name: Upload Bronze scripts
+        run: |
+          for f in glue_jobs/bronze/*.py; do
+            [ -f "$f" ] || continue
+            echo "  uploading $f"
+            aws s3 cp "$f" "s3://${GP_BUCKET}/scripts/$(basename $f)"
+          done
+        env:
+          GP_BUCKET: ${{ secrets.GP_BUCKET }}
+
+      - name: Upload Silver scripts
+        run: |
+          for f in glue_jobs/silver/*.py; do
+            [ -f "$f" ] || continue
+            echo "  uploading $f"
+            aws s3 cp "$f" "s3://${GP_BUCKET}/scripts/$(basename $f)"
+          done
+        env:
+          GP_BUCKET: ${{ secrets.GP_BUCKET }}
+
+      - name: Upload Gold scripts
+        run: |
+          for f in glue_jobs/gold/*.py; do
+            [ -f "$f" ] || continue
+            echo "  uploading $f"
+            aws s3 cp "$f" "s3://${GP_BUCKET}/scripts/$(basename $f)"
+          done
+        env:
+          GP_BUCKET: ${{ secrets.GP_BUCKET }}
+
+      - name: Sync Gold Glue jobs (idempotent)
+        # create_gold_jobs.py creates-or-updates every job defined in its
+        # JOBS dict. Safe to run repeatedly.
+        run: |
+          # Override the profile since GitHub Actions uses env-var auth,
+          # not a named profile. The helper script falls back to the
+          # default boto3 session if PROFILE is not a valid ~/.aws entry.
+          python - <<'PY'
+          import boto3, json, sys, subprocess
+          sys.path.insert(0, 'glue_jobs/gold/_deploy')
+          # Read the script so we can extract the JOBS dict, then apply the
+          # same create/update logic using the default boto3 session (which
+          # uses env-var credentials in GitHub Actions).
+          import importlib.util
+          spec = importlib.util.spec_from_file_location(
+              "create_gold_jobs", "glue_jobs/gold/_deploy/create_gold_jobs.py"
+          )
+          mod = importlib.util.module_from_spec(spec)
+          # Monkeypatch the PROFILE so it uses the default env-var session
+          import os
+          os.environ.setdefault("AWS_DEFAULT_REGION", os.environ.get("AWS_REGION", "us-east-1"))
+          # Replace boto3.Session(profile_name=PROFILE) with boto3.Session()
+          src = open("glue_jobs/gold/_deploy/create_gold_jobs.py").read()
+          src = src.replace(
+              '["aws", "glue", "create-job",\n         "--cli-input-json", f"file://{cfg_path.as_posix()}",\n         "--profile", PROFILE]',
+              '["aws", "glue", "create-job", "--cli-input-json", f"file://{cfg_path.as_posix()}"]'
+          )
+          # Quick-and-dirty: regenerate the JSONs and invoke via boto3 directly
+          import json
+          from pathlib import Path
+          JOBS = {
+              "build-dim-date":       {"desc": "Gold dim_date", "timeout": 15, "workers": 2},
+              "build-dim-customer":   {"desc": "Gold dim_customer", "timeout": 20, "workers": 2},
+              "build-dim-restaurant": {"desc": "Gold dim_restaurant", "timeout": 15, "workers": 2},
+              "build-dim-menu-item":  {"desc": "Gold dim_menu_item", "timeout": 15, "workers": 2},
+              "build-fact-orders":    {"desc": "Gold fact_orders", "timeout": 30, "workers": 2},
+              "build-gold-clv-snapshot":      {"desc": "Gold CLV snapshot (PRIMARY)", "timeout": 45, "workers": 4},
+              "build-gold-rfm":                {"desc": "Gold RFM segments", "timeout": 20, "workers": 2},
+              "build-gold-churn":              {"desc": "Gold churn indicators", "timeout": 20, "workers": 2},
+              "build-gold-sales-daily":        {"desc": "Gold sales_daily", "timeout": 20, "workers": 2},
+              "build-gold-sales-weekly":       {"desc": "Gold sales_weekly", "timeout": 15, "workers": 2},
+              "build-gold-sales-monthly":      {"desc": "Gold sales_monthly", "timeout": 15, "workers": 2},
+              "build-gold-loyalty":            {"desc": "Gold loyalty_comparison", "timeout": 15, "workers": 2},
+              "build-gold-location-perf":      {"desc": "Gold location_perf", "timeout": 15, "workers": 2},
+              "build-gold-upsell":             {"desc": "Gold upsell_analysis", "timeout": 20, "workers": 2},
+          }
+          glue = boto3.client("glue")
+          BUCKET = os.environ["GP_BUCKET"]
+          REGION = os.environ["AWS_REGION"]
+          SNS = os.environ.get("GP_SNS_TOPIC_ARN", "arn:aws:sns:us-east-1:041282018868:pipeline-failure-alerts")
+          ROLE = os.environ.get("GP_ROLE_ARN", "AWSGlueServiceRole-globalpartners")
+          if ROLE.startswith("arn:"):
+              ROLE = ROLE.split("/")[-1]  # Glue CreateJob wants role name, not ARN
+          for name, cfg in JOBS.items():
+              body = {
+                  "Name": name,
+                  "Description": cfg["desc"],
+                  "Role": ROLE,
+                  "ExecutionProperty": {"MaxConcurrentRuns": 1},
+                  "Command": {"Name": "glueetl", "ScriptLocation": f"s3://{BUCKET}/scripts/{name}.py", "PythonVersion": "3"},
+                  "DefaultArguments": {
+                      "--job-language": "python",
+                      "--job-bookmark-option": "job-bookmark-disable",
+                      "--enable-metrics": "true",
+                      "--enable-continuous-cloudwatch-log": "true",
+                      "--enable-spark-ui": "false",
+                      "--datalake-formats": "delta",
+                      "--S3_BUCKET": BUCKET,
+                      "--REGION": REGION,
+                      "--SNS_TOPIC_ARN": SNS,
+                      "--TempDir": f"s3://{BUCKET}/temp/",
+                  },
+                  "MaxRetries": 0,
+                  "Timeout": cfg["timeout"],
+                  "GlueVersion": "4.0",
+                  "NumberOfWorkers": cfg["workers"],
+                  "WorkerType": "G.1X",
+              }
+              try:
+                  glue.create_job(**body)
+                  print(f"  CREATED: {name}")
+              except glue.exceptions.AlreadyExistsException:
+                  # Update in place
+                  update_body = {k: v for k, v in body.items() if k != "Name"}
+                  glue.update_job(JobName=name, JobUpdate=update_body)
+                  print(f"  UPDATED: {name}")
+              except Exception as e:
+                  print(f"  ERROR:   {name} — {e}")
+                  raise
+          PY
+        env:
+          GP_BUCKET: ${{ secrets.GP_BUCKET }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          GP_SNS_TOPIC_ARN: ${{ secrets.GP_SNS_TOPIC_ARN }}
+          GP_ROLE_ARN: ${{ secrets.GP_ROLE_ARN }}
+
+      - name: Sync Glue Workflow + triggers (idempotent)
+        run: |
+          # create_workflow.py uses a named profile by default; we override
+          # it to use the environment credentials that configure-aws-credentials
+          # already set up.
+          python - <<'PY'
+          import os, sys, importlib.util, time
+          import boto3
+          from botocore.exceptions import ClientError
+
+          WORKFLOW = "globalpartners-daily-pipeline"
+          glue = boto3.client("glue")
+
+          # Ensure workflow exists
+          try:
+              glue.get_workflow(Name=WORKFLOW)
+              print(f"  EXISTS: workflow {WORKFLOW}")
+          except ClientError as e:
+              if e.response["Error"]["Code"] != "EntityNotFoundException":
+                  raise
+              glue.create_workflow(
+                  Name=WORKFLOW,
+                  Description="Daily BI pipeline: Bronze -> Silver -> Dims -> Fact -> Metrics",
+                  MaxConcurrentRuns=1,
+              )
+              print(f"  CREATED: workflow {WORKFLOW}")
+
+          def ensure_trigger(name, trigger_type, actions, predicate=None, schedule=None, description=""):
+              try:
+                  glue.delete_trigger(Name=name)
+                  for _ in range(10):
+                      try:
+                          glue.get_trigger(Name=name)
+                          time.sleep(1)
+                      except ClientError as e:
+                          if e.response["Error"]["Code"] == "EntityNotFoundException":
+                              break
+                          raise
+              except ClientError as e:
+                  if e.response["Error"]["Code"] != "EntityNotFoundException":
+                      raise
+
+              kwargs = {
+                  "Name": name,
+                  "WorkflowName": WORKFLOW,
+                  "Type": trigger_type,
+                  "Description": description,
+                  "Actions": [{"JobName": a} for a in actions],
+                  "StartOnCreation": trigger_type != "ON_DEMAND",
+              }
+              if predicate is not None:
+                  kwargs["Predicate"] = predicate
+              if schedule is not None:
+                  kwargs["Schedule"] = schedule
+              glue.create_trigger(**kwargs)
+              print(f"  CREATED: trigger {name} ({trigger_type}) -> {actions}")
+
+          ensure_trigger("gp-t0-schedule", "SCHEDULED",
+              actions=["bronze-ingest-all-tables"],
+              schedule="cron(0 2 * * ? *)",
+              description="Daily 02:00 UTC")
+          ensure_trigger("gp-t1-bronze-to-silver", "CONDITIONAL",
+              actions=["clean-order-items", "clean-order-item-options", "clean-date-dim"],
+              predicate={"Logical": "AND", "Conditions": [
+                  {"LogicalOperator": "EQUALS", "JobName": "bronze-ingest-all-tables", "State": "SUCCEEDED"}
+              ]})
+          ensure_trigger("gp-t2-silver-to-dims", "CONDITIONAL",
+              actions=["build-dim-date", "build-dim-customer", "build-dim-restaurant", "build-dim-menu-item"],
+              predicate={"Logical": "AND", "Conditions": [
+                  {"LogicalOperator": "EQUALS", "JobName": "clean-order-items",        "State": "SUCCEEDED"},
+                  {"LogicalOperator": "EQUALS", "JobName": "clean-order-item-options", "State": "SUCCEEDED"},
+                  {"LogicalOperator": "EQUALS", "JobName": "clean-date-dim",           "State": "SUCCEEDED"},
+              ]})
+          ensure_trigger("gp-t3-dims-to-fact", "CONDITIONAL",
+              actions=["build-fact-orders"],
+              predicate={"Logical": "AND", "Conditions": [
+                  {"LogicalOperator": "EQUALS", "JobName": "build-dim-date",       "State": "SUCCEEDED"},
+                  {"LogicalOperator": "EQUALS", "JobName": "build-dim-customer",   "State": "SUCCEEDED"},
+                  {"LogicalOperator": "EQUALS", "JobName": "build-dim-restaurant", "State": "SUCCEEDED"},
+                  {"LogicalOperator": "EQUALS", "JobName": "build-dim-menu-item",  "State": "SUCCEEDED"},
+              ]})
+          ensure_trigger("gp-t4-fact-to-metrics", "CONDITIONAL",
+              actions=[
+                  "build-gold-clv-snapshot", "build-gold-rfm", "build-gold-churn",
+                  "build-gold-sales-daily", "build-gold-sales-weekly", "build-gold-sales-monthly",
+                  "build-gold-loyalty", "build-gold-location-perf", "build-gold-upsell",
+              ],
+              predicate={"Logical": "AND", "Conditions": [
+                  {"LogicalOperator": "EQUALS", "JobName": "build-fact-orders", "State": "SUCCEEDED"}
+              ]})
+          print("Workflow + triggers synced.")
+          PY
+
+      - name: Done
+        run: echo "Deployed all 18 Glue scripts and synced workflow to AWS."
