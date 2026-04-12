@@ -134,8 +134,10 @@ jobs:
           glue = boto3.client("glue")
           BUCKET = os.environ["GP_BUCKET"]
           REGION = os.environ["AWS_REGION"]
-          SNS = os.environ.get("GP_SNS_TOPIC_ARN", "arn:aws:sns:us-east-1:041282018868:pipeline-failure-alerts")
-          ROLE = os.environ.get("GP_ROLE_ARN", "AWSGlueServiceRole-globalpartners")
+          # GitHub Actions passes missing secrets as EMPTY STRINGS (not unset),
+          # so os.environ.get(..., "default") doesn't fall back. Use `or` instead.
+          SNS = os.environ.get("GP_SNS_TOPIC_ARN") or "arn:aws:sns:us-east-1:041282018868:pipeline-failure-alerts"
+          ROLE = os.environ.get("GP_ROLE_ARN") or "AWSGlueServiceRole-globalpartners"
           if ROLE.startswith("arn:"):
               ROLE = ROLE.split("/")[-1]  # Glue CreateJob wants role name, not ARN
           for name, cfg in JOBS.items():

@@ -120,8 +120,13 @@ jobs:
           pip install -r dashboard/requirements.txt
 
       - name: Run Streamlit AppTest with mocked data loader
+        working-directory: dashboard
+        env:
+          # PYTHONPATH survives AppTest's module-loading dance, whereas a
+          # sys.path.insert() inside the inline script can be wiped by
+          # Streamlit's script runner.
+          PYTHONPATH: ${{ github.workspace }}/dashboard
         run: |
-          cd dashboard
           python - <<'PY'
           """
           AppTest smoke test for all 8 pages.
