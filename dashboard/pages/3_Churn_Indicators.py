@@ -30,7 +30,7 @@ st.caption(
     "Active ≤30d, Cooling Off 30-45d, **At Risk 45-60d**, Inactive >60d.\n"
     "* **Personal-gap** — `churn_tag_personal` — relative to each customer's own "
     "typical inter-order gap (1.5× / 2× / 3×). Better for weekly vs monthly "
-    "regulars since their "normal" differs."
+    'regulars since their "normal" differs.'
 )
 
 churn = get_table("gold_churn_indicators")

@@ -132,7 +132,9 @@ jobs:
           """
           import sys, os, warnings
           warnings.filterwarnings('ignore')
-          sys.path.insert(0, '.')
+          # Use absolute path — AppTest may change CWD per page load, which
+          # would break a relative '.' entry in sys.path.
+          sys.path.insert(0, os.path.abspath('.'))
 
           # --- Mock the data loader BEFORE Streamlit imports it ---
           import pandas as pd

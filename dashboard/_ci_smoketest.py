@@ -9,7 +9,8 @@ if you change the mock data here, update .github/workflows/ci.yml to match.
 
 import sys, os, warnings
 warnings.filterwarnings("ignore")
-sys.path.insert(0, ".")
+# Use absolute path — AppTest may change CWD per page load
+sys.path.insert(0, os.path.abspath("."))
 
 import pandas as pd
 from unittest.mock import patch
@@ -185,6 +186,25 @@ def _fake_query_large(sql):
 
 
 def main():
+    # 1. Pre-flight: compile every dashboard .py file to catch syntax errors
+    # up front. AppTest silently swallows load-time SyntaxErrors in some
+    # versions, so we check explicitly here before AppTest sees them.
+    import py_compile, pathlib
+    syntax_errs = []
+    for p in list(pathlib.Path(".").rglob("*.py")):
+        if p.name == "_ci_smoketest.py" or "__pycache__" in p.parts:
+            continue
+        try:
+            py_compile.compile(str(p), doraise=True)
+        except py_compile.PyCompileError as e:
+            syntax_errs.append((str(p), str(e).splitlines()[-2] if str(e).splitlines() else str(e)))
+    if syntax_errs:
+        print("SYNTAX ERRORS:")
+        for path, err in syntax_errs:
+            print("  " + path + ": " + err)
+        sys.exit(1)
+    print("  Pre-flight: all .py files compile cleanly.")
+
     patcher1 = patch("lib.data.get_table", side_effect=_fake_get_table)
     patcher2 = patch("lib.data.query_large", side_effect=_fake_query_large)
     patcher1.start()
