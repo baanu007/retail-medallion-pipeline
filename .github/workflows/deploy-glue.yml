@@ -217,18 +217,21 @@ jobs:
               print(f"  CREATED: workflow {WORKFLOW}")
 
           def ensure_trigger(name, trigger_type, actions, predicate=None, schedule=None, description=""):
+              # 1. Delete if exists
               try:
                   glue.delete_trigger(Name=name)
-                  for _ in range(10):
-                      try:
-                          glue.get_trigger(Name=name)
-                          time.sleep(1)
-                      except ClientError as e:
-                          if e.response["Error"]["Code"] == "EntityNotFoundException":
-                              break
-                          raise
               except ClientError as e:
                   if e.response["Error"]["Code"] != "EntityNotFoundException":
+                      raise
+
+              # 2. Wait up to 60s for the delete to propagate (Glue async)
+              for _ in range(30):
+                  try:
+                      glue.get_trigger(Name=name)
+                      time.sleep(2)
+                  except ClientError as e:
+                      if e.response["Error"]["Code"] == "EntityNotFoundException":
+                          break
                       raise
 
               kwargs = {
@@ -243,7 +246,26 @@ jobs:
                   kwargs["Predicate"] = predicate
               if schedule is not None:
                   kwargs["Schedule"] = schedule
-              glue.create_trigger(**kwargs)
+
+              # 3. Create with retry on IdempotentParameterMismatch / still-deleting
+              last_err = None
+              for attempt in range(6):
+                  try:
+                      glue.create_trigger(**kwargs)
+                      last_err = None
+                      break
+                  except glue.exceptions.IdempotentParameterMismatchException as e:
+                      last_err = e
+                      time.sleep(5 * (attempt + 1))
+                  except ClientError as e:
+                      code = e.response["Error"]["Code"]
+                      if code in ("ConcurrentModificationException", "InvalidInputException"):
+                          last_err = e
+                          time.sleep(5 * (attempt + 1))
+                      else:
+                          raise
+              if last_err is not None:
+                  raise last_err
               print(f"  CREATED: trigger {name} ({trigger_type}) -> {actions}")
 
           ensure_trigger("gp-t0-schedule", "SCHEDULED",
