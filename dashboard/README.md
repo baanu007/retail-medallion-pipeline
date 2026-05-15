@@ -1,7 +1,7 @@
-# GlobalPartners — Alltown Fresh Business Insights Dashboard
+# Retail Restaurant Business Insights Dashboard
 
 Streamlit dashboard for the 7 business metrics produced by the Glue pipeline.
-Reads Gold Delta Lake tables directly from `s3://globalpartners-aws/gold/`.
+Reads Gold Delta Lake tables directly from `s3://<BUCKET_NAME>/gold/`.
 
 ## Pages
 
@@ -19,9 +19,9 @@ Reads Gold Delta Lake tables directly from `s3://globalpartners-aws/gold/`.
 ## Prerequisites
 
 - Python 3.10+
-- AWS credentials for the `globalpartners` profile (`~/.aws/credentials`)
+- AWS credentials for the `retail-chain` profile (`~/.aws/credentials`)
 - The Gold layer must exist in S3 (run the Gold Glue jobs first — see
-  `session_20260411_gold_etls_built.md`)
+  `docs/sessions/session_20260411_gold_etls_built.md`)
 
 ## Install
 
@@ -33,17 +33,17 @@ pip install -r requirements.txt
 ## Run
 
 ```bash
-AWS_PROFILE=globalpartners streamlit run app.py
+AWS_PROFILE=retail-chain streamlit run app.py
 ```
 
 On Windows Git Bash:
 ```bash
-AWS_PROFILE=globalpartners PYTHONIOENCODING=utf-8 streamlit run app.py
+AWS_PROFILE=retail-chain PYTHONIOENCODING=utf-8 streamlit run app.py
 ```
 
 On Windows CMD:
 ```cmd
-set AWS_PROFILE=globalpartners
+set AWS_PROFILE=retail-chain
 streamlit run app.py
 ```
 
@@ -64,8 +64,8 @@ Credentials are resolved via the standard boto3 / AWS CLI credential chain
 
 ## Troubleshooting
 
-**"No credentials found"** — make sure `AWS_PROFILE=globalpartners` is set,
-or that `aws sts get-caller-identity --profile globalpartners` returns an
+**"No credentials found"** — make sure `AWS_PROFILE=retail-chain` is set,
+or that `aws sts get-caller-identity --profile retail-chain` returns an
 identity.
 
 **"Cannot load delta extension"** — DuckDB needs network access to download

@@ -12,8 +12,8 @@ Tables ingested:
     dbo.date_dim             → s3://bucket/bronze/date_dim/
 
 Job parameters required:
-    --S3_BUCKET       globalpartners-aws
-    --SECRET_NAME     globalpartners/aurora/credentials
+    --S3_BUCKET       <BUCKET_NAME>
+    --SECRET_NAME     retail-chain/aurora/credentials
     --REGION          us-east-1
     --SNS_TOPIC_ARN   arn:aws:sns:...
     --datalake-formats delta

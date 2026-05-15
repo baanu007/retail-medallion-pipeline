@@ -131,7 +131,7 @@ glue_jobs/
 
 ## 5. Aurora SQL Server Setup
 
-### Tables Created in `globalpartners` Database
+### Tables Created in `retail-chain` Database
 
 ```sql
 -- Table 1: order_items (203,519 rows)
@@ -211,8 +211,8 @@ Full Bronze ingestion job:
 | Component | Status |
 |---|---|
 | S3 bucket with bronze/silver/gold folders | DONE |
-| Secrets Manager secret (`globalpartners/aurora/credentials`) | DONE |
-| IAM Role (`AWSGlueServiceRole-globalpartners`) | DONE |
+| Secrets Manager secret (`retail-chain/aurora/credentials`) | DONE |
+| IAM Role (`AWSGlueServiceRole-retail-chain`) | DONE |
 | SNS Topic (`pipeline-failure-alerts`) | DONE |
 | Scripts uploaded to S3 (`scripts/` folder) | PENDING |
 | Glue job created (`bronze-ingest-all-tables`) | PENDING |

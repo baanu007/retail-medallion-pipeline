@@ -5,7 +5,7 @@
 
 ## TL;DR
 
-Built the `globalpartners-daily-pipeline` Glue Workflow chaining all **18
+Built the `retail-daily-pipeline` Glue Workflow chaining all **18
 pipeline jobs** in dependency order. Scheduled trigger fires daily at
 **02:00 UTC**. Manually started a test run — **the workflow completed
 end-to-end with all 18 jobs SUCCEEDED on the first attempt** in
@@ -84,11 +84,11 @@ after the initial Bronze marathon.
 
 | # | Name | Type | Predicate | Action(s) |
 |---|---|---|---|---|
-| 0 | `gp-t0-schedule` | SCHEDULED | `cron(0 2 * * ? *)` | bronze-ingest-all-tables |
-| 1 | `gp-t1-bronze-to-silver` | CONDITIONAL | bronze = SUCCEEDED | 3 silver jobs |
-| 2 | `gp-t2-silver-to-dims` | CONDITIONAL | all 3 silver = SUCCEEDED | 4 dim jobs |
-| 3 | `gp-t3-dims-to-fact` | CONDITIONAL | all 4 dims = SUCCEEDED | fact_orders |
-| 4 | `gp-t4-fact-to-metrics` | CONDITIONAL | fact_orders = SUCCEEDED | 9 metric jobs |
+| 0 | `t0-schedule` | SCHEDULED | `cron(0 2 * * ? *)` | bronze-ingest-all-tables |
+| 1 | `t1-bronze-to-silver` | CONDITIONAL | bronze = SUCCEEDED | 3 silver jobs |
+| 2 | `t2-silver-to-dims` | CONDITIONAL | all 3 silver = SUCCEEDED | 4 dim jobs |
+| 3 | `t3-dims-to-fact` | CONDITIONAL | all 4 dims = SUCCEEDED | fact_orders |
+| 4 | `t4-fact-to-metrics` | CONDITIONAL | fact_orders = SUCCEEDED | 9 metric jobs |
 
 Glue Workflows allow only **one starting trigger** per workflow. I used a
 SCHEDULED trigger (not an ON_DEMAND) — the `aws glue start-workflow-run` API
@@ -110,16 +110,16 @@ python glue_jobs/workflow/create_workflow.py
 
 Output (after small fixes — see Section 3):
 ```
-  EXISTS: workflow globalpartners-daily-pipeline
+  EXISTS: workflow retail-daily-pipeline
   DELETED: legacy gp-t0-ondemand trigger
-  CREATED: trigger gp-t0-schedule (SCHEDULED) -> ['bronze-ingest-all-tables']
-  CREATED: trigger gp-t1-bronze-to-silver (CONDITIONAL) -> ['clean-order-items', 'clean-order-item-options', 'clean-date-dim']
-  CREATED: trigger gp-t2-silver-to-dims (CONDITIONAL) -> ['build-dim-date', 'build-dim-customer', 'build-dim-restaurant', 'build-dim-menu-item']
-  CREATED: trigger gp-t3-dims-to-fact (CONDITIONAL) -> ['build-fact-orders']
-  CREATED: trigger gp-t4-fact-to-metrics (CONDITIONAL) -> ['build-gold-clv-snapshot', 'build-gold-rfm', 'build-gold-churn', ...]
+  CREATED: trigger t0-schedule (SCHEDULED) -> ['bronze-ingest-all-tables']
+  CREATED: trigger t1-bronze-to-silver (CONDITIONAL) -> ['clean-order-items', 'clean-order-item-options', 'clean-date-dim']
+  CREATED: trigger t2-silver-to-dims (CONDITIONAL) -> ['build-dim-date', 'build-dim-customer', 'build-dim-restaurant', 'build-dim-menu-item']
+  CREATED: trigger t3-dims-to-fact (CONDITIONAL) -> ['build-fact-orders']
+  CREATED: trigger t4-fact-to-metrics (CONDITIONAL) -> ['build-gold-clv-snapshot', 'build-gold-rfm', 'build-gold-churn', ...]
 
 Workflow ready. Manually run with:
-  aws glue start-workflow-run --name globalpartners-daily-pipeline --profile globalpartners
+  aws glue start-workflow-run --name retail-daily-pipeline --profile retail-chain
 
 The SCHEDULED trigger is ACTIVATED and will fire daily at 02:00 UTC.
 ```
@@ -140,7 +140,7 @@ ON_DEMAND trigger type.
 ### 3.2 Glue allows only ONE starting trigger per workflow
 After fixing #1, next attempt hit:
 ```
-InvalidInputException: Workflow globalpartners-daily-pipeline already has a
+InvalidInputException: Workflow retail-daily-pipeline already has a
 starting trigger: gp-t0-ondemand
 ```
 Glue Workflows enforce a single starting trigger. Can't have both ON_DEMAND
@@ -160,7 +160,7 @@ with `->` (ASCII) to stay portable.
 
 ### 4.1 How it was triggered
 ```bash
-aws glue start-workflow-run --name globalpartners-daily-pipeline --profile globalpartners
+aws glue start-workflow-run --name retail-daily-pipeline --profile retail-chain
 # → RunId: wr_74fe399f505aa79fe069cdb10f3b8aa6969303b04eda0ca3569f61b6dce0f00d
 ```
 
@@ -238,36 +238,36 @@ Every conditional trigger fired exactly when expected.
 ### Manual run (ad-hoc)
 ```bash
 aws glue start-workflow-run \
-    --name globalpartners-daily-pipeline \
-    --profile globalpartners
+    --name retail-daily-pipeline \
+    --profile retail-chain
 ```
 
 ### Check status
 ```bash
 aws glue get-workflow-run \
-    --name globalpartners-daily-pipeline \
+    --name retail-daily-pipeline \
     --run-id <RUN_ID> \
-    --profile globalpartners \
+    --profile retail-chain \
     --query "Run.{Status:Status,Stats:Statistics}"
 ```
 
 ### View graph
 ```bash
 aws glue get-workflow-run \
-    --name globalpartners-daily-pipeline \
+    --name retail-daily-pipeline \
     --run-id <RUN_ID> \
     --include-graph \
-    --profile globalpartners
+    --profile retail-chain
 ```
 
 ### Disable scheduled runs (if needed for cost control)
 ```bash
-aws glue stop-trigger --name gp-t0-schedule --profile globalpartners
+aws glue stop-trigger --name t0-schedule --profile retail-chain
 ```
 
 ### Re-enable scheduled runs
 ```bash
-aws glue start-trigger --name gp-t0-schedule --profile globalpartners
+aws glue start-trigger --name t0-schedule --profile retail-chain
 ```
 
 ### Recreate everything (idempotent)

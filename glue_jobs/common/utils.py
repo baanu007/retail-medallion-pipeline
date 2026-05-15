@@ -43,7 +43,7 @@ def get_secret(secret_name: str, region: str) -> dict:
     Fetches a JSON secret from AWS Secrets Manager and returns it as a dict.
 
     Args:
-        secret_name: e.g. "globalpartners/aurora/credentials"
+        secret_name: e.g. "retail-chain/aurora/credentials"
         region:      e.g. "us-east-1"
 
     Returns:
@@ -73,7 +73,7 @@ def build_jdbc_url(host: str, port: str, dbname: str) -> str:
     Args:
         host:   Aurora endpoint, e.g. "mydb.cluster-xxxx.us-east-1.rds.amazonaws.com"
         port:   "1433"
-        dbname: "globalpartners"
+        dbname: "retail_chain"
 
     Returns:
         JDBC URL string with SSL enabled.

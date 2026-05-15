@@ -1,9 +1,31 @@
-# GlobalPartners / Alltown Fresh — Business Insights Assessment
+# Retail Medallion Pipeline — End-to-End AWS Data Engineering
 
-End-to-end data engineering project for GlobalPartners: ingest transactional
-order data from RDS SQL Server, process through a Bronze/Silver/Gold medallion
-architecture on AWS, compute 7 business metrics, and expose them via an
-interactive Streamlit dashboard.
+End-to-end data engineering project for a fictional retail restaurant chain:
+ingest transactional order data from RDS SQL Server, process through a
+Bronze/Silver/Gold medallion architecture on AWS, compute 7 business metrics,
+and expose them via an interactive Streamlit dashboard.
+
+---
+
+## Data
+
+The source CSVs that originally fed this pipeline were proprietary client data
+and are **not** included in this repository. The schema is a fairly generic
+restaurant-chain order model:
+
+- `order_items` — line-item-grain order data (header columns flattened in:
+  customer id, restaurant id, order timestamps, totals, payment fields,
+  loyalty fields, app/channel name, etc.)
+- `order_item_options` — modifier / option rows that hang off `order_items`
+- `date_dim` — a standard date dimension
+
+To run this pipeline end-to-end you would provide your own retail order data
+with a similar schema and load it into an RDS SQL Server instance. The Bronze
+ingest job (`glue_jobs/bronze/bronze-ingest-all-tables.py`) reads the three
+tables over JDBC; everything from Silver onwards is pure S3 + Delta Lake.
+
+The Solution Design Document under `docs/design/` describes the schema and
+data quality rules in more detail.
 
 ---
 
@@ -47,7 +69,7 @@ RDS SQL Server (source)
 └────────────────────┘
 ```
 
-**Orchestration**: AWS Glue Workflow `globalpartners-daily-pipeline` chains
+**Orchestration**: AWS Glue Workflow `retail-daily-pipeline` chains
 18 jobs via scheduled + conditional triggers. Fires daily at 02:00 UTC.
 
 **Wall-clock end-to-end**: 13 min 21 sec (verified).
@@ -55,8 +77,6 @@ RDS SQL Server (source)
 ---
 
 ## 3. Tech Stack — Why Each Choice
-
-Per Step 7 requirement "explain WHY behind each tech stack used in your design."
 
 ### 3.1 Amazon S3 + Delta Lake
 **Why**: Cheapest durable object store (~$0.023/GB); Delta Lake adds ACID
@@ -69,12 +89,10 @@ metadata).
 
 ### 3.2 AWS Glue + PySpark
 **Why**: Serverless Spark — no cluster to manage, scales to data volume,
-pay only for actual job runtime. PySpark is the assessment requirement.
-Glue 4.0 includes native Delta Lake support via the `--datalake-formats
-delta` parameter.
+pay only for actual job runtime. Glue 4.0 includes native Delta Lake support
+via the `--datalake-formats delta` parameter.
 **Alternatives rejected**: EMR (requires cluster lifecycle management),
-Databricks (external vendor — forbidden by requirements), pure Lambda
-(won't scale to Spark workloads).
+Databricks (external vendor), pure Lambda (won't scale to Spark workloads).
 
 ### 3.3 AWS Glue Workflow (native orchestration)
 **Why**: Built-in scheduling, conditional triggers, and job chaining —
@@ -97,7 +115,7 @@ in logs), hardcoding (never).
 ### 3.5 AWS KMS + SSE-KMS
 **Why**: Customer-managed encryption keys with CloudTrail audit trail for
 every decrypt. Rotation every 365 days. Meets enterprise compliance
-requirements the spec explicitly asks for ("encryption").
+requirements.
 **Alternatives rejected**: SSE-S3 (default, no audit trail), client-side
 encryption (complicates reads from Glue).
 
@@ -116,8 +134,8 @@ Python — no JavaScript, no separate frontend build. Built-in caching
 convention, programmatic testing via `streamlit.testing.v1.AppTest` (we
 use this in our CI pipeline).
 **Alternatives rejected**: Dash (more boilerplate, harder to test),
-Tableau/PowerBI (external license, spec forbids), custom React (weeks of
-work for a dashboard).
+Tableau/PowerBI (external license), custom React (weeks of work for a
+dashboard).
 
 ### 3.8 DuckDB (in-process) + `deltalake` Python library
 **Why**: For querying the 10.8M-row `gold_clv_snapshot` in the dashboard
@@ -140,8 +158,7 @@ interactive), Streamlit native charts (too limited).
 
 ### 3.10 GitHub Actions (CI/CD)
 **Why**: Free for public repos, good AWS integration via
-`aws-actions/configure-aws-credentials`, spec explicitly asks for
-"CI/CD pipeline using github". Our CI runs lint + syntax + Streamlit
+`aws-actions/configure-aws-credentials`. CI runs lint + syntax + Streamlit
 import checks on every push; CD uploads Glue scripts and syncs the
 workflow on merge to main.
 **Alternatives rejected**: AWS CodePipeline (more setup, IAM tangle),
@@ -155,36 +172,42 @@ PR integration).
 ```
 .
 ├── README.md                          ← this file (tech stack + overview)
+├── LICENSE                            ← MIT
 ├── .gitignore
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml                     ← lint, syntax, Streamlit import tests
-│       └── deploy-glue.yml             ← upload scripts + sync workflow on main
+│       └── deploy-glue.yml            ← upload scripts + sync workflow on main
 │
-├── GlobalPartners_Business_Analysis_Requirements.docx  ← source-of-truth spec
-├── Solution_Design_Document_v3.docx    ← architecture SDD
-├── architecture_v3.drawio              ← architecture diagram (draw.io source)
-├── architecture_v3.jpg                 ← architecture diagram (image export)
+├── architecture_v3.drawio             ← architecture diagram (draw.io source)
+├── architecture_v3.jpg                ← architecture diagram (image export)
+├── date_dim.csv                       ← small reference date dimension
 │
-├── 01_data_exploration.md              ← Step 1 output: schema + DQ profiling
-├── session_20260331_dq_report.md       ← Step 2 output: data quality deep-dive
-├── session_20260402_architecture_v3.md ← Step 3: architecture decisions + SME cycle
-├── session_20260409_bronze_setup.md    ← Bronze build notes
-├── session_20260411_bronze_debug_success.md  ← Bronze 9-error debug marathon
-├── session_20260411_silver_etls_built.md     ← Silver layer session
-├── session_20260411_gold_etls_built.md       ← Gold layer session
-├── session_20260411_dashboard_built.md       ← Dashboard session
-├── session_20260411_workflow_built.md        ← Glue Workflow session
-├── session_20260411_spec_compliance_fixes.md ← cross-verification + fixes
+├── docs/
+│   ├── design/                        ← Solution Design Documents (docx)
+│   │   ├── Solution_Design_Document_v1.docx
+│   │   ├── Solution_Design_Document_v3.docx
+│   │   ├── Pipeline_Architecture_Design.docx
+│   │   └── Data_Quality.docx
+│   └── sessions/                      ← raw build session journals
+│       ├── 01_data_exploration.md
+│       ├── session_20260331_dq_report.md
+│       ├── session_20260402_architecture_v3.md
+│       ├── session_20260409_bronze_setup.md
+│       ├── session_20260411_bronze_debug_success.md
+│       ├── session_20260411_silver_etls_built.md
+│       ├── session_20260411_gold_etls_built.md
+│       ├── session_20260411_dashboard_built.md
+│       ├── session_20260411_workflow_built.md
+│       ├── session_20260411_cicd_github.md
+│       └── session_20260411_spec_compliance_fixes.md
 │
-├── order_items.csv                     ← source CSVs (load into RDS SQL Server)
-├── order_item_options.csv
-├── date_dim.csv
+├── tools/
+│   └── build_sdd_v3.py                ← regenerates the SDD docx from source
 │
 ├── glue_jobs/
 │   ├── bronze/
-│   │   ├── bronze-ingest-all-tables.py          ← 1 Bronze job
-│   │   └── bronze-ingest-all-tables-EXPLAINED.docx
+│   │   └── bronze-ingest-all-tables.py          ← 1 Bronze job
 │   ├── silver/
 │   │   ├── clean-order-items.py                 ← 3 Silver jobs
 │   │   ├── clean-order-item-options.py
@@ -233,18 +256,21 @@ PR integration).
 
 ### Prerequisites
 - Python 3.10+
-- AWS account with `globalpartners` profile configured
-  (`aws configure --profile globalpartners`)
-- RDS SQL Server with the 3 tables loaded from the CSVs
+- AWS account with a named profile configured (referred to as `retail-chain`
+  below — use whatever name you like)
+  (`aws configure --profile retail-chain`)
+- RDS SQL Server with the 3 tables (`order_items`, `order_item_options`,
+  `date_dim`) loaded from your own source data
+- An S3 bucket (referred to as `<BUCKET_NAME>` below)
 
 ### One-time AWS setup
 ```bash
 # Create S3 bucket
-aws s3 mb s3://globalpartners-aws --profile globalpartners
+aws s3 mb s3://<BUCKET_NAME> --profile retail-chain
 
 # Upload scripts
 for f in glue_jobs/bronze/*.py glue_jobs/silver/*.py glue_jobs/gold/*.py; do
-  aws s3 cp $f s3://globalpartners-aws/scripts/$(basename $f) --profile globalpartners
+  aws s3 cp $f s3://<BUCKET_NAME>/scripts/$(basename $f) --profile retail-chain
 done
 
 # Create Glue jobs (idempotent)
@@ -257,8 +283,8 @@ python glue_jobs/workflow/create_workflow.py
 ### Run the pipeline manually
 ```bash
 aws glue start-workflow-run \
-    --name globalpartners-daily-pipeline \
-    --profile globalpartners
+    --name retail-daily-pipeline \
+    --profile retail-chain
 ```
 
 The workflow chains all 18 jobs in dependency order. Expect ~13-15 min
@@ -268,7 +294,7 @@ wall-clock end-to-end.
 ```bash
 cd dashboard
 pip install -r requirements.txt
-AWS_PROFILE=globalpartners streamlit run app.py
+AWS_PROFILE=retail-chain streamlit run app.py
 ```
 
 Open http://localhost:8501.
@@ -297,14 +323,14 @@ Runs on push to `main`:
 ### Required GitHub Secrets
 Set these in **Settings → Secrets and variables → Actions**:
 
-| Secret Name | Value |
+| Secret Name | Example Value |
 |---|---|
 | `AWS_ACCESS_KEY_ID` | IAM access key with Glue/S3 permissions |
 | `AWS_SECRET_ACCESS_KEY` | corresponding secret key |
 | `AWS_REGION` | `us-east-1` |
-| `GP_BUCKET` | `globalpartners-aws` |
-| `GP_ROLE_ARN` | `arn:aws:iam::041282018868:role/AWSGlueServiceRole-globalpartners` |
-| `GP_SNS_TOPIC_ARN` | `arn:aws:sns:us-east-1:041282018868:pipeline-failure-alerts` |
+| `BUCKET` | `<BUCKET_NAME>` |
+| `GLUE_ROLE_ARN` | `arn:aws:iam::<AWS_ACCOUNT_ID>:role/<GLUE_ROLE>` |
+| `SNS_TOPIC_ARN` | `arn:aws:sns:us-east-1:<AWS_ACCOUNT_ID>:<TOPIC_NAME>` |
 
 The CI pipeline does NOT require any secrets — it only runs lint + syntax
 + import checks that work on any machine.
@@ -319,16 +345,14 @@ Verified end-to-end workflow runs (see session reports for details):
 |---|---|---|---|
 | 2026-04-11 | 18/18 (Bronze→Silver→Dims→Fact→Metrics) | COMPLETED | 13:21 |
 
-Since the Bronze debug marathon on 2026-04-11 (9 errors fixed, patterns
-established), we've had **39 consecutive successful Glue job executions**
-with zero debugging. The pattern-based approach (self-contained scripts,
+After the Bronze debug marathon on 2026-04-11 (9 errors fixed, patterns
+established), we had **39 consecutive successful Glue job executions** with
+zero debugging. The pattern-based approach (self-contained scripts,
 DeltaTable API, defensive dedup, try/except wrapping, manifests + SNS
 alerts) is fully validated.
 
 ---
 
-## 8. Credits
+## License
 
-- **Assessment**: DE Academy Business Insights Assessment
-- **Domain**: GlobalPartners / Alltown Fresh restaurant chain
-- **Requirements**: see `GlobalPartners_Business_Analysis_Requirements.docx`
+MIT — see [LICENSE](LICENSE).

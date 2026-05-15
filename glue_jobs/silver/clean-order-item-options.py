@@ -46,7 +46,7 @@ NOTE on orphan options:
     options to line items to build fact_orders.
 
 Job parameters required:
-    --S3_BUCKET       globalpartners-aws
+    --S3_BUCKET       <BUCKET_NAME>
     --REGION          us-east-1
     --SNS_TOPIC_ARN   arn:aws:sns:us-east-1:...:pipeline-failure-alerts
     --datalake-formats delta

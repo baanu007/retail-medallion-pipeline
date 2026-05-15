@@ -70,8 +70,8 @@ pointing to (rename mismatch during manual upload).
 **Fix**: Re-uploaded via AWS CLI with exact filename:
 ```bash
 aws s3 cp bronze-ingest-all-tables.py \
-    s3://globalpartners-aws/scripts/bronze-ingest-all-tables.py \
-    --profile globalpartners
+    s3://<BUCKET_NAME>/scripts/bronze-ingest-all-tables.py \
+    --profile retail-chain
 ```
 
 **Lesson**: Never trust manual console uploads for script name precision. Use
@@ -104,15 +104,15 @@ via CLI. The console UI hides invisible characters.
 
 **Symptom**: `creds['dbname']` failed inside `build_jdbc_url()`.
 
-**Root cause**: The Secrets Manager secret (`globalpartners/aurora/credentials`)
+**Root cause**: The Secrets Manager secret (`retail-chain/aurora/credentials`)
 had `username`, `password`, `host`, `port`, `dbInstanceIdentifier` — but no
 `dbname` key.
 
 **Fix**: Updated the secret via CLI to add the missing key:
 ```bash
 aws secretsmanager update-secret \
-    --secret-id globalpartners/aurora/credentials \
-    --secret-string '{"username":"...","password":"...","host":"...","port":"1433","dbname":"globalpartners"}'
+    --secret-id retail-chain/aurora/credentials \
+    --secret-string '{"username":"...","password":"...","host":"...","port":"1433","dbname":"retail_chain"}'
 ```
 
 **Lesson**: When writing code that reads secrets, document the expected schema
@@ -152,7 +152,7 @@ else:
 **Symptom**: `order_items` table failed with IAM access denied when Delta Lake
 tried to verify the default Glue catalog database exists.
 
-**Root cause**: The IAM role `AWSGlueServiceRole-globalpartners` had
+**Root cause**: The IAM role `AWSGlueServiceRole-retail-chain` had
 `SecretsManagerReadWrite`, `CloudWatchFullAccess`, `AmazonSNSFullAccess`,
 `AmazonS3FullAccess` — but no Glue catalog permissions. Delta Lake on Glue
 always checks the catalog during write operations, even if you don't use
@@ -161,7 +161,7 @@ catalog tables directly.
 **Fix**: Attached the AWS-managed `AWSGlueServiceRole` policy:
 ```bash
 aws iam attach-role-policy \
-    --role-name AWSGlueServiceRole-globalpartners \
+    --role-name AWSGlueServiceRole-retail-chain \
     --policy-arn arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
 ```
 
@@ -302,13 +302,13 @@ Final merge keys:
 
 | Component | Status |
 |---|---|
-| S3 bucket `globalpartners-aws` with bronze/silver/gold folders | DONE |
-| Secrets Manager `globalpartners/aurora/credentials` (with `dbname` key) | DONE |
-| IAM Role `AWSGlueServiceRole-globalpartners` | DONE |
+| S3 bucket `<BUCKET_NAME>` with bronze/silver/gold folders | DONE |
+| Secrets Manager `retail-chain/aurora/credentials` (with `dbname` key) | DONE |
+| IAM Role `AWSGlueServiceRole-retail-chain` | DONE |
 | IAM Role has `AWSGlueServiceRole` managed policy | DONE (added today) |
 | IAM Role has S3, Secrets, SNS, CloudWatch full access | DONE |
 | SNS Topic `pipeline-failure-alerts` | DONE |
-| Scripts in S3: `s3://globalpartners-aws/scripts/bronze-ingest-all-tables.py` | DONE |
+| Scripts in S3: `s3://<BUCKET_NAME>/scripts/bronze-ingest-all-tables.py` | DONE |
 | Glue Job `bronze-ingest-all-tables` configured and running | DONE |
 | Glue Job parameters: S3_BUCKET, SECRET_NAME, REGION, SNS_TOPIC_ARN, `--datalake-formats delta` | DONE |
 | Bronze run verified — all 3 tables in S3 | DONE |
@@ -324,7 +324,7 @@ Final merge keys:
 ## 5. Data Landed in S3 (Verified)
 
 ```
-s3://globalpartners-aws/bronze/
+s3://<BUCKET_NAME>/bronze/
 ├── order_items/
 │   ├── _delta_log/00000000000000000000.json      (3.6 KB)
 │   └── ingestion_date=2026-04-11/
@@ -338,7 +338,7 @@ s3://globalpartners-aws/bronze/
     └── ingestion_date=2026-04-11/
         └── part-00000-xxxx.snappy.parquet         (5.0 KB)
 
-s3://globalpartners-aws/manifests/bronze-ingest-all-tables/2026-04-11/status.json
+s3://<BUCKET_NAME>/manifests/bronze-ingest-all-tables/2026-04-11/status.json
 (overall_status: SUCCESS — all 3 tables)
 ```
 
@@ -376,10 +376,10 @@ These are now the project-wide standards, validated through today's debugging:
 ### 7.2 Glue Job Parameters (Required for Every Job)
 ```
 --JOB_NAME          (auto)
---S3_BUCKET         globalpartners-aws
---SECRET_NAME       globalpartners/aurora/credentials
+--S3_BUCKET         <BUCKET_NAME>
+--SECRET_NAME       retail-chain/aurora/credentials
 --REGION            us-east-1
---SNS_TOPIC_ARN     arn:aws:sns:us-east-1:041282018868:pipeline-failure-alerts
+--SNS_TOPIC_ARN     arn:aws:sns:us-east-1:<AWS_ACCOUNT_ID>:pipeline-failure-alerts
 --datalake-formats  delta    ← REQUIRED for any Delta operations
 ```
 
@@ -429,29 +429,29 @@ DataFrame on the merge keys as a safety net before calling merge.
 
 ### 7.7 CLI Debugging Commands (Worth Memorizing)
 ```bash
-# Profile is "globalpartners" (account 041282018868)
+# Profile is "retail-chain" (account <AWS_ACCOUNT_ID>)
 
 # Inspect Glue job config (catches hidden-char bugs)
-aws glue get-job --job-name <name> --profile globalpartners \
+aws glue get-job --job-name <name> --profile retail-chain \
     --query Job.DefaultArguments
 
 # Update Glue job params cleanly
 aws glue update-job --job-name <name> --job-update file://clean.json \
-    --profile globalpartners
+    --profile retail-chain
 
 # Verify script in S3
-aws s3 ls s3://globalpartners-aws/scripts/ --profile globalpartners
-aws s3 cp s3://globalpartners-aws/scripts/<file> - --profile globalpartners | tail -20
+aws s3 ls s3://<BUCKET_NAME>/scripts/ --profile retail-chain
+aws s3 cp s3://<BUCKET_NAME>/scripts/<file> - --profile retail-chain | tail -20
 
 # Read manifest after run
-aws s3 cp s3://globalpartners-aws/manifests/<job>/<date>/status.json - \
-    --profile globalpartners
+aws s3 cp s3://<BUCKET_NAME>/manifests/<job>/<date>/status.json - \
+    --profile retail-chain
 
 # Check data landed
-aws s3 ls s3://globalpartners-aws/bronze/<table>/ --recursive --profile globalpartners
+aws s3 ls s3://<BUCKET_NAME>/bronze/<table>/ --recursive --profile retail-chain
 
 # Check IAM role policies
-aws iam list-attached-role-policies --role-name <role> --profile globalpartners
+aws iam list-attached-role-policies --role-name <role> --profile retail-chain
 ```
 
 ---

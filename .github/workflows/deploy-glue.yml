@@ -8,9 +8,9 @@ name: CD — sync Glue jobs + workflow to AWS
 #   AWS_ACCESS_KEY_ID       — IAM user with Glue + S3 permissions
 #   AWS_SECRET_ACCESS_KEY
 #   AWS_REGION              — e.g. us-east-1
-#   GP_BUCKET               — e.g. globalpartners-aws
+#   BUCKET               — e.g. <BUCKET_NAME>
 #
-# Optional: GP_ROLE_ARN / GP_SNS_TOPIC_ARN — only needed if you override
+# Optional: GLUE_ROLE_ARN / SNS_TOPIC_ARN — only needed if you override
 #   the defaults baked into glue_jobs/*/_deploy/create_*.py.
 
 on:
@@ -51,39 +51,39 @@ jobs:
       - name: Sanity-check AWS identity
         run: |
           aws sts get-caller-identity
-          aws s3 ls "s3://${GP_BUCKET}/" > /dev/null && echo "S3 bucket reachable."
+          aws s3 ls "s3://${BUCKET}/" > /dev/null && echo "S3 bucket reachable."
         env:
-          GP_BUCKET: ${{ secrets.GP_BUCKET }}
+          BUCKET: ${{ secrets.BUCKET }}
 
       - name: Upload Bronze scripts
         run: |
           for f in glue_jobs/bronze/*.py; do
             [ -f "$f" ] || continue
             echo "  uploading $f"
-            aws s3 cp "$f" "s3://${GP_BUCKET}/scripts/$(basename $f)"
+            aws s3 cp "$f" "s3://${BUCKET}/scripts/$(basename $f)"
           done
         env:
-          GP_BUCKET: ${{ secrets.GP_BUCKET }}
+          BUCKET: ${{ secrets.BUCKET }}
 
       - name: Upload Silver scripts
         run: |
           for f in glue_jobs/silver/*.py; do
             [ -f "$f" ] || continue
             echo "  uploading $f"
-            aws s3 cp "$f" "s3://${GP_BUCKET}/scripts/$(basename $f)"
+            aws s3 cp "$f" "s3://${BUCKET}/scripts/$(basename $f)"
           done
         env:
-          GP_BUCKET: ${{ secrets.GP_BUCKET }}
+          BUCKET: ${{ secrets.BUCKET }}
 
       - name: Upload Gold scripts
         run: |
           for f in glue_jobs/gold/*.py; do
             [ -f "$f" ] || continue
             echo "  uploading $f"
-            aws s3 cp "$f" "s3://${GP_BUCKET}/scripts/$(basename $f)"
+            aws s3 cp "$f" "s3://${BUCKET}/scripts/$(basename $f)"
           done
         env:
-          GP_BUCKET: ${{ secrets.GP_BUCKET }}
+          BUCKET: ${{ secrets.BUCKET }}
 
       - name: Sync Gold Glue jobs (idempotent)
         # create_gold_jobs.py creates-or-updates every job defined in its
@@ -132,12 +132,12 @@ jobs:
               "build-gold-upsell":             {"desc": "Gold upsell_analysis", "timeout": 20, "workers": 2},
           }
           glue = boto3.client("glue")
-          BUCKET = os.environ["GP_BUCKET"]
+          BUCKET = os.environ["BUCKET"]
           REGION = os.environ["AWS_REGION"]
           # GitHub Actions passes missing secrets as EMPTY STRINGS (not unset),
           # so os.environ.get(..., "default") doesn't fall back. Use `or` instead.
-          SNS = os.environ.get("GP_SNS_TOPIC_ARN") or "arn:aws:sns:us-east-1:041282018868:pipeline-failure-alerts"
-          ROLE = os.environ.get("GP_ROLE_ARN") or "AWSGlueServiceRole-globalpartners"
+          SNS = os.environ.get("SNS_TOPIC_ARN") or "arn:aws:sns:us-east-1:<AWS_ACCOUNT_ID>:pipeline-failure-alerts"
+          ROLE = os.environ.get("GLUE_ROLE_ARN") or "AWSGlueServiceRole-retail-chain"
           if ROLE.startswith("arn:"):
               ROLE = ROLE.split("/")[-1]  # Glue CreateJob wants role name, not ARN
           for name, cfg in JOBS.items():
@@ -184,10 +184,10 @@ jobs:
                   raise
           PY
         env:
-          GP_BUCKET: ${{ secrets.GP_BUCKET }}
+          BUCKET: ${{ secrets.BUCKET }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
-          GP_SNS_TOPIC_ARN: ${{ secrets.GP_SNS_TOPIC_ARN }}
-          GP_ROLE_ARN: ${{ secrets.GP_ROLE_ARN }}
+          SNS_TOPIC_ARN: ${{ secrets.SNS_TOPIC_ARN }}
+          GLUE_ROLE_ARN: ${{ secrets.GLUE_ROLE_ARN }}
 
       - name: Sync Glue Workflow + triggers (idempotent)
         run: |
@@ -199,7 +199,7 @@ jobs:
           import boto3
           from botocore.exceptions import ClientError
 
-          WORKFLOW = "globalpartners-daily-pipeline"
+          WORKFLOW = "retail-daily-pipeline"
           glue = boto3.client("glue")
 
           # Ensure workflow exists
@@ -268,23 +268,23 @@ jobs:
                   raise last_err
               print(f"  CREATED: trigger {name} ({trigger_type}) -> {actions}")
 
-          ensure_trigger("gp-t0-schedule", "SCHEDULED",
+          ensure_trigger("t0-schedule", "SCHEDULED",
               actions=["bronze-ingest-all-tables"],
               schedule="cron(0 2 * * ? *)",
               description="Daily 02:00 UTC")
-          ensure_trigger("gp-t1-bronze-to-silver", "CONDITIONAL",
+          ensure_trigger("t1-bronze-to-silver", "CONDITIONAL",
               actions=["clean-order-items", "clean-order-item-options", "clean-date-dim"],
               predicate={"Logical": "AND", "Conditions": [
                   {"LogicalOperator": "EQUALS", "JobName": "bronze-ingest-all-tables", "State": "SUCCEEDED"}
               ]})
-          ensure_trigger("gp-t2-silver-to-dims", "CONDITIONAL",
+          ensure_trigger("t2-silver-to-dims", "CONDITIONAL",
               actions=["build-dim-date", "build-dim-customer", "build-dim-restaurant", "build-dim-menu-item"],
               predicate={"Logical": "AND", "Conditions": [
                   {"LogicalOperator": "EQUALS", "JobName": "clean-order-items",        "State": "SUCCEEDED"},
                   {"LogicalOperator": "EQUALS", "JobName": "clean-order-item-options", "State": "SUCCEEDED"},
                   {"LogicalOperator": "EQUALS", "JobName": "clean-date-dim",           "State": "SUCCEEDED"},
               ]})
-          ensure_trigger("gp-t3-dims-to-fact", "CONDITIONAL",
+          ensure_trigger("t3-dims-to-fact", "CONDITIONAL",
               actions=["build-fact-orders"],
               predicate={"Logical": "AND", "Conditions": [
                   {"LogicalOperator": "EQUALS", "JobName": "build-dim-date",       "State": "SUCCEEDED"},
@@ -292,7 +292,7 @@ jobs:
                   {"LogicalOperator": "EQUALS", "JobName": "build-dim-restaurant", "State": "SUCCEEDED"},
                   {"LogicalOperator": "EQUALS", "JobName": "build-dim-menu-item",  "State": "SUCCEEDED"},
               ]})
-          ensure_trigger("gp-t4-fact-to-metrics", "CONDITIONAL",
+          ensure_trigger("t4-fact-to-metrics", "CONDITIONAL",
               actions=[
                   "build-gold-clv-snapshot", "build-gold-rfm", "build-gold-churn",
                   "build-gold-sales-daily", "build-gold-sales-weekly", "build-gold-sales-monthly",

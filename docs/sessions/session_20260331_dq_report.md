@@ -1,7 +1,7 @@
 # Session Report - March 31 to April 1, 2026
 
 ## Overview
-Full data quality analysis and pipeline architecture design session for the GlobalPartners Alltown Fresh DE Academy assessment.
+Full data quality analysis and pipeline architecture design session for the Retail Restaurant Chain (synthetic) DE Academy assessment.
 
 ---
 
@@ -46,7 +46,7 @@ Full data quality analysis and pipeline architecture design session for the Glob
 - Clean avg order value: ~$15-17
 - Order date range: 2020-04-21 to 2024-02-21
 - date_dim only covers 2023 (60.4% of order rows are outside 2023)
-- 3 APP_NAMEs: Alltown Fresh (98.97%), Neighborhood Perks (0.62%), DEVELOPMENT (0.41%)
+- 3 APP_NAMEs: Retail Restaurant (98.97%), Neighborhood Perks (0.62%), DEVELOPMENT (0.41%)
 - CURRENCY is always "USD" (constant column)
 - OPTION_QUANTITY is always 1 (zero variance column)
 - 203,332 timestamps have milliseconds, 187 do not (mixed format)

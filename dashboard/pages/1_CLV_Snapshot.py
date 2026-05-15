@@ -149,4 +149,4 @@ with col2:
         st.warning("No CLV snapshot rows for this customer.")
 
 st.divider()
-st.caption("Source: `s3://globalpartners-aws/gold/gold_clv_snapshot/` — built by `build-gold-clv-snapshot.py`")
+st.caption("Source: `s3://<BUCKET_NAME>/gold/gold_clv_snapshot/` — built by `build-gold-clv-snapshot.py`")

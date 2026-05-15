@@ -1,5 +1,5 @@
 """
-Build Solution Design Document v3 - Alltown Fresh Pipeline Architecture
+Build Solution Design Document v3 - Retail Restaurant Pipeline Architecture
 """
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor, Cm, Emu
@@ -111,7 +111,7 @@ run.font.color.rgb = RGBColor(0x1B, 0x3A, 0x5C)
 
 p = doc.add_paragraph()
 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-run = p.add_run("Alltown Fresh — Business Insights Pipeline")
+run = p.add_run("Retail Restaurant — Business Insights Pipeline")
 run.font.size = Pt(18)
 run.font.color.rgb = RGBColor(0x44, 0x72, 0xC4)
 
@@ -135,7 +135,7 @@ add_table(
     ["Field", "Value"],
     [
         ["Document", "Solution Design Document — Pipeline Architecture v3"],
-        ["Project", "GlobalPartners Business Insights Assessment (Alltown Fresh)"],
+        ["Project", "Retail Chain Business Insights project (Retail Restaurant)"],
         ["Version", "3.0 (supersedes v1 and v2)"],
         ["Date", "April 2, 2026"],
         ["Classification", "Internal — DE Academy Assessment"],
@@ -202,7 +202,7 @@ doc.add_page_break()
 doc.add_heading("1. Executive Summary", level=1)
 
 doc.add_paragraph(
-    "This document describes the production-grade data pipeline architecture for the Alltown Fresh "
+    "This document describes the production-grade data pipeline architecture for the Retail Restaurant "
     "Business Insights platform. The pipeline ingests transactional data from 27 restaurant locations, "
     "cleans and transforms it through a medallion architecture (Bronze/Silver/Gold), calculates seven "
     "categories of business metrics, and serves them to a Streamlit dashboard via Amazon Athena."
@@ -245,7 +245,7 @@ doc.add_page_break()
 doc.add_heading("2. Business Requirements Traceability", level=1)
 
 doc.add_paragraph(
-    "Every requirement from the GlobalPartners Business Analysis Requirements document is traced to "
+    "Every requirement from the Retail Chain Business Analysis Requirements document is traced to "
     "a specific component in this architecture. This section exists so the SME can verify that nothing "
     "was missed."
 )
@@ -287,7 +287,7 @@ doc.add_heading("3. Source Data Profile", level=1)
 
 doc.add_paragraph(
     "The source data resides in a SQL Server database hosted on AWS RDS. It consists of three tables "
-    "representing transactional data from the Alltown Fresh restaurant chain."
+    "representing transactional data from the Retail Restaurant restaurant chain."
 )
 
 doc.add_heading("3.1 Tables Overview", level=2)
@@ -316,7 +316,7 @@ add_table(
     [
         ["590 rows with ITEM_PRICE > $50 (max $5,000)", "0.3% of rows distort 79% of total revenue", "Filter: ITEM_PRICE <= $50"],
         ["84 rows with ITEM_QUANTITY > 20 (max 500)", "Overlaps with price outliers", "Filter: ITEM_QUANTITY <= 20"],
-        ["826 rows from DEVELOPMENT app", "Test data from single test restaurant", "Exclude: APP_NAME = 'Alltown Fresh - DEVELOPMENT'"],
+        ["826 rows from DEVELOPMENT app", "Test data from single test restaurant", "Exclude: APP_NAME = 'Retail Restaurant - DEVELOPMENT'"],
         ["17,808 rows (8.75%) with no USER_ID", "Cannot calculate per-customer metrics", "Exclude from CLV/RFM/churn; keep for aggregate analysis"],
         ["8 dirty ITEM_CATEGORY values", "Embedded URLs, typos, trailing digits", "Clean via mapping table (45 → 40 categories)"],
         ["Zero negative OPTION_PRICE values exist", "Cannot detect discounts as requirements suggest", "Pivot to upsell analysis (free vs paid add-ons)"],
@@ -414,7 +414,7 @@ add_table(
         ["What it does", "Stores all three layers of the data lake: Bronze (raw), Silver (clean), Gold (metrics)"],
         ["Why this service", "S3 is the cheapest, most scalable storage on AWS. Native integration with Glue (PySpark reads/writes directly) and Athena (queries S3 in-place). Pay only for what you store."],
         ["Storage format", "Delta Lake on all layers. Not raw Parquet."],
-        ["Bucket structure", "s3://alltown-fresh-data-lake/{bronze|silver|gold}/{table_name}/"],
+        ["Bucket structure", "s3://<BUCKET_NAME>/{bronze|silver|gold}/{table_name}/"],
         ["Versioning", "Enabled. Previous versions retained 30 days for emergency rollback."],
         ["Lifecycle", "Transition Bronze data to S3 Glacier after 90 days (cost optimisation for raw data)."],
     ],
@@ -576,7 +576,7 @@ add_table(
         ["Purpose", "Exact copy of source data in S3. No transformations. The raw audit trail."],
         ["Glue Job", "Job 1: INGEST"],
         ["Source", "RDS SQL Server (JDBC over SSL, credentials from Secrets Manager)"],
-        ["Target", "s3://alltown-fresh-data-lake/bronze/{table_name}/"],
+        ["Target", "s3://<BUCKET_NAME>/bronze/{table_name}/"],
         ["Format", "Delta Lake"],
         ["Partitioning", "ingestion_date (YYYY-MM-DD) — each daily run writes to its own partition"],
         ["Ingestion method", "Delta merge (upsert) on primary key. Reads source table, compares with existing Bronze data via Delta, writes only new/changed rows. This is how we handle incremental ingestion without a separate metadata tracker — Delta's _delta_log tracks what has been processed."],
@@ -602,8 +602,8 @@ add_table(
     [
         ["Purpose", "Validated, cleaned, business-ready data. All data quality rules applied."],
         ["Glue Job", "Job 2: CLEAN"],
-        ["Source", "s3://alltown-fresh-data-lake/bronze/"],
-        ["Target", "s3://alltown-fresh-data-lake/silver/{table_name}/"],
+        ["Source", "s3://<BUCKET_NAME>/bronze/"],
+        ["Target", "s3://<BUCKET_NAME>/silver/{table_name}/"],
         ["Format", "Delta Lake"],
         ["Partitioning", "ingestion_date"],
         ["Tables written", "silver.order_items_clean, silver.order_item_options_clean, silver.date_dim_extended"],
@@ -621,8 +621,8 @@ add_table(
     [
         ["Purpose", "Business-ready tables consumed by Athena and the Streamlit dashboard."],
         ["Glue Job", "Job 3: METRICS"],
-        ["Source", "s3://alltown-fresh-data-lake/silver/"],
-        ["Target", "s3://alltown-fresh-data-lake/gold/{table_name}/"],
+        ["Source", "s3://<BUCKET_NAME>/silver/"],
+        ["Target", "s3://<BUCKET_NAME>/gold/{table_name}/"],
         ["Format", "Delta Lake"],
         ["Build order", "Dimensions first (dim_customer, dim_restaurant, dim_date, dim_menu_item) → then fact_orders → then all 9 metric tables. Metrics depend on fact + dims, so the order matters."],
         ["Partitioning", "fact_orders: partitioned by order_year_month (YYYY-MM). Metric tables: no partition (all < 1 MB, full overwrite daily)."],
@@ -640,13 +640,13 @@ doc.add_page_break()
 doc.add_heading("7. Orchestration — AWS Glue Workflow", level=1)
 
 doc.add_paragraph(
-    "All orchestration is handled by a single AWS Glue Workflow named alltown-fresh-daily-workflow. "
+    "All orchestration is handled by a single AWS Glue Workflow named retail-daily-pipeline. "
     "No external orchestrator (Step Functions, EventBridge, Airflow) is needed."
 )
 
 doc.add_heading("7.1 Workflow DAG", level=2)
 add_code(
-    "alltown-fresh-daily-workflow\n"
+    "retail-daily-pipeline\n"
     "│\n"
     "├── Scheduled Trigger: cron(0 2 * * ? *)  [Daily 2:00 AM UTC]\n"
     "│\n"
@@ -767,7 +767,7 @@ doc.add_paragraph(
     "uses Delta merge (upsert on primary key), re-running the same day produces exactly the same result "
     "with no duplicates. This is idempotent by design."
 )
-add_code("aws glue start-workflow-run --name alltown-fresh-daily-workflow")
+add_code("aws glue start-workflow-run --name retail-daily-pipeline")
 
 doc.add_heading("8.4 Backfill (Historical Reload)", level=2)
 doc.add_paragraph(
@@ -775,7 +775,7 @@ doc.add_paragraph(
 )
 add_code(
     'aws glue start-workflow-run \\\n'
-    '  --name alltown-fresh-daily-workflow \\\n'
+    '  --name retail-daily-pipeline \\\n'
     '  --run-properties \'{"--start_date": "2024-01-01", "--end_date": "2024-01-31"}\''
 )
 doc.add_paragraph(
@@ -792,7 +792,7 @@ add_code(
     "# In PySpark (or an ad-hoc Glue job):\n"
     "from delta.tables import DeltaTable\n"
     "\n"
-    "dt = DeltaTable.forPath(spark, 's3://alltown-fresh-data-lake/gold/fact_orders/')\n"
+    "dt = DeltaTable.forPath(spark, 's3://<BUCKET_NAME>/gold/fact_orders/')\n"
     "dt.restoreToVersion(previous_version)  # instant rollback, no reprocessing"
 )
 doc.add_paragraph(
@@ -851,7 +851,7 @@ add_code(
     "    │\n"
     "    ▼\n"
     "Email delivered to subscribed team members\n"
-    "    Subject: 'PIPELINE FAILED: alltown-fresh-daily-workflow'\n"
+    "    Subject: 'PIPELINE FAILED: retail-daily-pipeline'\n"
     "    Body: failed job name, failed tables, run ID, CloudWatch log link"
 )
 
@@ -1056,7 +1056,7 @@ add_table(
         ["has_paid_options", "BOOLEAN", "TRUE if any option has OPTION_PRICE > 0"],
         ["paid_option_count", "INT", "Count of paid add-ons (OPTION_PRICE > 0)"],
         ["is_loyalty", "BOOLEAN", "TRUE if IS_LOYALTY = TRUE on any line item"],
-        ["app_name", "STRING", "Ordering platform (Alltown Fresh, Neighborhood Perks)"],
+        ["app_name", "STRING", "Ordering platform (Retail Restaurant, Neighborhood Perks)"],
     ],
     col_widths=[4, 3, 9.5]
 )
@@ -1341,7 +1341,7 @@ add_table(
     [
         ["DQ-01", "Remove price outliers", "ITEM_PRICE <= 50", "590 (0.29%)", "Prices up to $5,000 on items that normally cost $8-15. Data entry errors. <1% of rows distort 79% of revenue."],
         ["DQ-02", "Remove quantity outliers", "ITEM_QUANTITY <= 20", "84 (0.04%)", "Quantities up to 500. No restaurant serves 500 of one item in a single order."],
-        ["DQ-03", "Exclude DEVELOPMENT app", "APP_NAME != 'Alltown Fresh - DEVELOPMENT'", "826 (0.41%)", "Test data from a single test restaurant. Not real transactions."],
+        ["DQ-03", "Exclude DEVELOPMENT app", "APP_NAME != 'Retail Restaurant - DEVELOPMENT'", "826 (0.41%)", "Test data from a single test restaurant. Not real transactions."],
         ["DQ-04", "Exclude Test Items category", "ITEM_CATEGORY != 'Test Items'", "1 (0.00%)", "Single test row."],
         ["DQ-05", "Exclude zero-quantity row", "ITEM_QUANTITY > 0", "1 (0.00%)", "One row with qty=0, empty name/category. Contributes nothing."],
         ["DQ-06", "Clean dirty categories", "Mapping table (see below)", "~1,347 (0.66%)", "Embedded URLs, typos, trailing digits. Maps 45 dirty values to 40 clean values."],

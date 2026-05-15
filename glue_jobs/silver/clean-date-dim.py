@@ -37,7 +37,7 @@ Why overwrite instead of merge:
     than merging. Matches the Bronze strategy for this table.
 
 Job parameters required:
-    --S3_BUCKET       globalpartners-aws
+    --S3_BUCKET       <BUCKET_NAME>
     --REGION          us-east-1
     --SNS_TOPIC_ARN   arn:aws:sns:us-east-1:...:pipeline-failure-alerts
     --datalake-formats delta

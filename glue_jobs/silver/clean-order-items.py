@@ -12,7 +12,7 @@ Merge key: ORDER_ID + LINEITEM_ID  (true composite PK — verified in Bronze deb
 Operations performed (the "what Silver does" for this table):
     1. Read Bronze Delta table
     2. Business filters:
-         - Exclude APP_NAME = "Alltown Fresh - DEVELOPMENT"  (826 test rows)
+         - Exclude APP_NAME = "Retail Restaurant - DEVELOPMENT"  (826 test rows)
          - Exclude RESTAURANT_ID = "6050e76361e498ca740bba6f"  (dev-only restaurant)
          - Exclude ITEM_CATEGORY = "Test Items"  (1 test row)
     3. Drop rows with NULL ORDER_ID or NULL LINEITEM_ID (unjoinable)
@@ -43,7 +43,7 @@ Operations performed (the "what Silver does" for this table):
    10. Write manifest + SNS alert on failure
 
 Job parameters required:
-    --S3_BUCKET       globalpartners-aws
+    --S3_BUCKET       <BUCKET_NAME>
     --REGION          us-east-1
     --SNS_TOPIC_ARN   arn:aws:sns:us-east-1:...:pipeline-failure-alerts
     --datalake-formats delta
@@ -218,7 +218,7 @@ try:
     # ── Step 2: Business filters (exclude dev + test data) ──
     logger.info("Applying business filters: exclude DEVELOPMENT + dev restaurant + test items")
     df = bronze_df.filter(
-        (F.col("APP_NAME") != "Alltown Fresh - DEVELOPMENT")
+        (F.col("APP_NAME") != "Retail Restaurant - DEVELOPMENT")
         & (F.col("RESTAURANT_ID") != "6050e76361e498ca740bba6f")
         & ((F.col("ITEM_CATEGORY") != "Test Items") | F.col("ITEM_CATEGORY").isNull())
     )

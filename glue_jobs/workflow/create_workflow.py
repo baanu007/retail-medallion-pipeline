@@ -1,6 +1,6 @@
 """
 create_workflow.py
-Creates the `globalpartners-daily-pipeline` Glue Workflow and all 6 triggers.
+Creates the `retail-daily-pipeline` Glue Workflow and all 6 triggers.
 
 Idempotent: deletes + recreates triggers on each run so re-running the script
 always yields the same final state. The workflow itself is not deleted.
@@ -10,15 +10,15 @@ Run:
 
 Triggers created:
     1. gp-t0-ondemand         — ON_DEMAND     -> bronze-ingest-all-tables
-    2. gp-t0-schedule         — SCHEDULED     -> bronze-ingest-all-tables
+    2. t0-schedule         — SCHEDULED     -> bronze-ingest-all-tables
        (cron(0 2 * * ? *) = daily 02:00 UTC)
-    3. gp-t1-bronze-to-silver — CONDITIONAL   -> 3 silver jobs
+    3. t1-bronze-to-silver — CONDITIONAL   -> 3 silver jobs
        (predicate: bronze SUCCEEDED)
-    4. gp-t2-silver-to-dims   — CONDITIONAL   -> 4 dim jobs
+    4. t2-silver-to-dims   — CONDITIONAL   -> 4 dim jobs
        (predicate: ALL 3 silver jobs SUCCEEDED)
-    5. gp-t3-dims-to-fact     — CONDITIONAL   -> fact_orders
+    5. t3-dims-to-fact     — CONDITIONAL   -> fact_orders
        (predicate: ALL 4 dim jobs SUCCEEDED)
-    6. gp-t4-fact-to-metrics  — CONDITIONAL   -> 9 metric jobs
+    6. t4-fact-to-metrics  — CONDITIONAL   -> 9 metric jobs
        (predicate: fact_orders SUCCEEDED)
 """
 
@@ -26,8 +26,8 @@ import sys
 import boto3
 from botocore.exceptions import ClientError
 
-WORKFLOW = "globalpartners-daily-pipeline"
-PROFILE = "globalpartners"
+WORKFLOW = "retail-daily-pipeline"
+PROFILE = "retail-chain"
 REGION = "us-east-1"
 
 session = boto3.Session(profile_name=PROFILE, region_name=REGION)
@@ -104,7 +104,7 @@ def main():
     # `aws glue start-workflow-run` API which starts the workflow run
     # regardless of the schedule.
     ensure_trigger(
-        "gp-t0-schedule",
+        "t0-schedule",
         "SCHEDULED",
         actions=["bronze-ingest-all-tables"],
         schedule="cron(0 2 * * ? *)",
@@ -113,7 +113,7 @@ def main():
 
     # T1: bronze SUCCEEDED -> silver layer (3 jobs in parallel)
     ensure_trigger(
-        "gp-t1-bronze-to-silver",
+        "t1-bronze-to-silver",
         "CONDITIONAL",
         actions=[
             "clean-order-items",
@@ -133,7 +133,7 @@ def main():
 
     # T2: all silver SUCCEEDED -> dim layer (4 jobs in parallel)
     ensure_trigger(
-        "gp-t2-silver-to-dims",
+        "t2-silver-to-dims",
         "CONDITIONAL",
         actions=[
             "build-dim-date",
@@ -154,7 +154,7 @@ def main():
 
     # T3: all dims SUCCEEDED -> fact_orders
     ensure_trigger(
-        "gp-t3-dims-to-fact",
+        "t3-dims-to-fact",
         "CONDITIONAL",
         actions=["build-fact-orders"],
         predicate={
@@ -171,7 +171,7 @@ def main():
 
     # T4: fact SUCCEEDED -> metrics (9 jobs in parallel)
     ensure_trigger(
-        "gp-t4-fact-to-metrics",
+        "t4-fact-to-metrics",
         "CONDITIONAL",
         actions=[
             "build-gold-clv-snapshot",

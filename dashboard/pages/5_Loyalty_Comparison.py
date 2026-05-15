@@ -90,4 +90,4 @@ rev_fig.update_layout(height=420, title="Share of total revenue by segment")
 st.plotly_chart(rev_fig, use_container_width=True)
 
 st.dataframe(loy, use_container_width=True, hide_index=True)
-st.caption("Source: `s3://globalpartners-aws/gold/gold_loyalty_comparison/`")
+st.caption("Source: `s3://<BUCKET_NAME>/gold/gold_loyalty_comparison/`")
