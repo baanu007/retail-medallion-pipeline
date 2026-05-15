@@ -1,22 +1,21 @@
 name: CD — sync Glue jobs + workflow to AWS
 
-# Runs on push to main (after CI passes). Uploads all 18 Glue scripts to S3
-# and re-runs the idempotent deployment helpers so Glue jobs and the workflow
-# stay in sync with main.
+# Manual trigger only -- prevents accidental deploys without proper secrets
+# configured. Auto-deploy on push-to-main was failing every push because the
+# BUCKET secret was not set on this repo (it had been renamed from GP_BUCKET),
+# which produced a red X on every commit and spammed the Actions log.
 #
-# Requires these GitHub Secrets to be set on the repo:
+# Required GitHub Secrets before running this workflow:
 #   AWS_ACCESS_KEY_ID       — IAM user with Glue + S3 permissions
 #   AWS_SECRET_ACCESS_KEY
 #   AWS_REGION              — e.g. us-east-1
-#   BUCKET               — e.g. <BUCKET_NAME>
+#   BUCKET                  — name of the S3 bucket holding Glue scripts
 #
 # Optional: GLUE_ROLE_ARN / SNS_TOPIC_ARN — only needed if you override
 #   the defaults baked into glue_jobs/*/_deploy/create_*.py.
 
 on:
-  push:
-    branches: ["main"]
-  workflow_dispatch: {}
+  workflow_dispatch: {}  # manual trigger only -- see header for required secrets
 
 concurrency:
   group: deploy-glue-${{ github.ref }}
