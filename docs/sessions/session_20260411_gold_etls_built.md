@@ -305,7 +305,7 @@ Bronze Error #4).
 ## 6. S3 Gold Layer Final State
 
 ```
-s3://globalpartners-aws/gold/
+s3://<BUCKET_NAME>/gold/
 ├── dim_date/                   (  13 KB)
 ├── dim_customer/               ( 661 KB)  20,044 customers
 ├── dim_restaurant/             (   7 KB)  27 restaurants
@@ -322,7 +322,7 @@ s3://globalpartners-aws/gold/
 ├── gold_upsell_summary/        (   9 KB)  1 row
 └── gold_upsell_top_options/    (  11 KB)  ~65K top paid options
 
-s3://globalpartners-aws/manifests/
+s3://<BUCKET_NAME>/manifests/
 ├── build-dim-date/2026-04-11/status.json           (SUCCESS)
 ├── build-dim-customer/2026-04-11/status.json       (SUCCESS)
 ├── build-dim-restaurant/2026-04-11/status.json     (SUCCESS)

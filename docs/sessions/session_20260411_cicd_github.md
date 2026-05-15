@@ -112,14 +112,14 @@ Runs on every push to `main`. **Requires 4 GitHub secrets.**
 
 | Secret Name | Value |
 |---|---|
-| `AWS_ACCESS_KEY_ID` | IAM access key for the globalpartners AWS account |
+| `AWS_ACCESS_KEY_ID` | IAM access key for the retail-chain AWS account |
 | `AWS_SECRET_ACCESS_KEY` | corresponding secret key |
 | `AWS_REGION` | `us-east-1` |
-| `GP_BUCKET` | `globalpartners-aws` |
+| `BUCKET` | `<BUCKET_NAME>` |
 
 Optional overrides (otherwise defaults are baked in):
-- `GP_ROLE_ARN`: IAM role name for Glue jobs (default `AWSGlueServiceRole-globalpartners`)
-- `GP_SNS_TOPIC_ARN`: SNS topic for failure alerts
+- `GLUE_ROLE_ARN`: IAM role name for Glue jobs (default `AWSGlueServiceRole-retail-chain`)
+- `SNS_TOPIC_ARN`: SNS topic for failure alerts
 
 **How to add secrets**: go to the GitHub repo → Settings → Secrets and
 variables → Actions → New repository secret.
@@ -128,8 +128,8 @@ variables → Actions → New repository secret.
 
 1. **Checkout** + **Setup Python 3.11** + **Install boto3**
 2. **Configure AWS credentials** via `aws-actions/configure-aws-credentials@v4`
-3. **Sanity check**: `aws sts get-caller-identity` + `aws s3 ls s3://$GP_BUCKET/`
-4. **Upload Bronze scripts** — `aws s3 cp glue_jobs/bronze/*.py s3://$GP_BUCKET/scripts/`
+3. **Sanity check**: `aws sts get-caller-identity` + `aws s3 ls s3://$BUCKET/`
+4. **Upload Bronze scripts** — `aws s3 cp glue_jobs/bronze/*.py s3://$BUCKET/scripts/`
 5. **Upload Silver scripts** (3 files)
 6. **Upload Gold scripts** (14 files)
 7. **Sync Gold Glue jobs**: inline Python helper uses boto3 to create-or-update
@@ -173,7 +173,7 @@ Each entry has a WHY + what alternatives were rejected and why.
 
 ```
 Branch: main
-Initial commit: fb4c425 "Initial commit: end-to-end GlobalPartners BI pipeline"
+Initial commit: fb4c425 "Initial commit: end-to-end Retail Chain BI pipeline"
 Files tracked: 58
 Working tree: clean
 Remote: (not yet configured — see §6)
@@ -193,12 +193,12 @@ Files NOT tracked (per .gitignore): `.claude/`, `~$*.docx` Office lock files,
 gh auth login
 
 # 2) Create the repo under your account and push this branch
-gh repo create baanu007/globalpartners-bi-assessment \
+gh repo create baanu007/retail-medallion-pipeline \
     --public \
     --source=. \
     --remote=origin \
     --push \
-    --description "GlobalPartners / Alltown Fresh Business Insights — DE Academy Assessment"
+    --description "Retail Restaurant Chain (synthetic) Business Insights — DE Academy Assessment"
 
 # 3) Watch the CI workflow run (will pass — validated locally)
 gh run watch
@@ -211,7 +211,7 @@ share the code publicly during review.
 
 After the repo is up, go to:
 
-    https://github.com/baanu007/globalpartners-bi-assessment/settings/secrets/actions
+    https://github.com/baanu007/retail-medallion-pipeline/settings/secrets/actions
 
 Click **"New repository secret"** and add these four:
 
@@ -220,13 +220,13 @@ Click **"New repository secret"** and add these four:
 | `AWS_ACCESS_KEY_ID` | (your IAM access key) |
 | `AWS_SECRET_ACCESS_KEY` | (corresponding secret key) |
 | `AWS_REGION` | `us-east-1` |
-| `GP_BUCKET` | `globalpartners-aws` |
+| `BUCKET` | `<BUCKET_NAME>` |
 
 **IMPORTANT**: use an IAM user scoped to just Glue + S3 permissions, not your
 root credentials. Suggested IAM policy:
 - `AWSGlueConsoleFullAccess`
-- `AmazonS3FullAccess` (or scope to just `s3://globalpartners-aws/*`)
-- `IAMPassRole` on `AWSGlueServiceRole-globalpartners`
+- `AmazonS3FullAccess` (or scope to just `s3://<BUCKET_NAME>/*`)
+- `IAMPassRole` on `AWSGlueServiceRole-retail-chain`
 
 After the secrets are set, the CD workflow will run automatically on the
 next push to `main`. You can also trigger it manually via **Actions →

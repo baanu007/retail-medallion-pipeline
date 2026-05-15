@@ -11,7 +11,7 @@ st.set_page_config(page_title="Location Performance", page_icon="📍", layout="
 
 st.title("Location Performance")
 st.caption(
-    "27 Alltown Fresh locations ranked by revenue, order volume, unique customer "
+    "27 Retail Restaurant locations ranked by revenue, order volume, unique customer "
     "base, and **customer retention rate** (% of customers who ordered ≥2 times). "
     "Retention distinguishes top performers — a high-revenue restaurant with low "
     "retention is relying on one-time visits; a high-retention restaurant has "
@@ -123,4 +123,4 @@ display.columns = [
 ]
 st.dataframe(display, use_container_width=True, hide_index=True)
 
-st.caption("Source: `s3://globalpartners-aws/gold/gold_location_perf/` — now includes retention_rate_pct")
+st.caption("Source: `s3://<BUCKET_NAME>/gold/gold_location_perf/` — now includes retention_rate_pct")

@@ -28,11 +28,11 @@ JOBS = {
     "build-gold-upsell":             {"desc": "Gold upsell_analysis", "timeout": 20, "workers": 2},
 }
 
-BUCKET = "globalpartners-aws"
+BUCKET = "<BUCKET_NAME>"
 REGION = "us-east-1"
-SNS_ARN = "arn:aws:sns:us-east-1:041282018868:pipeline-failure-alerts"
-ROLE = "AWSGlueServiceRole-globalpartners"
-PROFILE = "globalpartners"
+SNS_ARN = "arn:aws:sns:us-east-1:<AWS_ACCOUNT_ID>:pipeline-failure-alerts"
+ROLE = "AWSGlueServiceRole-retail-chain"
+PROFILE = "retail-chain"
 
 
 def build_config(job_name, desc, timeout, workers):

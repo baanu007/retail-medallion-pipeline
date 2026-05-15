@@ -149,4 +149,4 @@ alerts = (
 st.write(f"{(churn['days_since_last_order'] > 45).sum():,} customers exceed the 45-day threshold. Top 200 shown.")
 st.dataframe(alerts, use_container_width=True, hide_index=True)
 
-st.caption("Source: `s3://globalpartners-aws/gold/gold_churn_indicators/`")
+st.caption("Source: `s3://<BUCKET_NAME>/gold/gold_churn_indicators/`")

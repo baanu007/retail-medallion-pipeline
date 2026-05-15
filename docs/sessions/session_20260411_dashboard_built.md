@@ -49,7 +49,7 @@ every page with real data. **All 8 pages render without runtime errors.**
            │ S3 API (AWS SDK)
            ▼
 ┌──────────────────────────────┐
-│  s3://globalpartners-aws/    │
+│  s3://<BUCKET_NAME>/    │
 │  gold/ — 15 Delta tables     │
 └──────────────────────────────┘
 ```
@@ -153,7 +153,7 @@ other 5 were already present).
 
 ### 4.2 deltalake → pandas on a small table
 ```python
-dt = DeltaTable('s3://globalpartners-aws/gold/dim_restaurant', storage_options=...)
+dt = DeltaTable('s3://<BUCKET_NAME>/gold/dim_restaurant', storage_options=...)
 df = dt.to_pandas()  # 27 rows — works
 ```
 
@@ -204,7 +204,7 @@ From the project root:
 ```bash
 cd dashboard
 pip install -r requirements.txt
-AWS_PROFILE=globalpartners streamlit run app.py
+AWS_PROFILE=retail-chain streamlit run app.py
 ```
 
 Open <http://localhost:8501> in your browser.

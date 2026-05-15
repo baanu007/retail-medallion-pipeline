@@ -1,7 +1,7 @@
 """
-Data access layer for the GlobalPartners BI dashboard.
+Data access layer for the Retail Chain BI dashboard.
 
-Reads Delta Lake tables from s3://globalpartners-aws/gold/ using two strategies:
+Reads Delta Lake tables from s3://<BUCKET_NAME>/gold/ using two strategies:
 
 1. `get_table(name)` — loads a full Gold Delta table as a pandas DataFrame
    via the `deltalake` Python library. Cached per session.  Appropriate for
@@ -36,7 +36,7 @@ import pandas as pd
 import streamlit as st
 from deltalake import DeltaTable
 
-BUCKET = os.environ.get("GP_BUCKET", "globalpartners-aws")
+BUCKET = os.environ.get("BUCKET", "<BUCKET_NAME>")
 REGION = os.environ.get("AWS_REGION", "us-east-1")
 GOLD = f"s3://{BUCKET}/gold"
 

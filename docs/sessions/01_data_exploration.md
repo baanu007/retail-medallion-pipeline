@@ -1,7 +1,7 @@
 # Step 1: Source Data Exploration Report
 
 **Date**: 2026-03-30
-**Project**: GlobalPartners Business Insights Assessment (Alltown Fresh)
+**Project**: Retail Chain Business Insights project (Retail Restaurant)
 **Status**: COMPLETE
 **Method**: All statistics validated via Python scripts against raw CSV data
 
@@ -42,9 +42,9 @@
 #### APP_NAME Distribution
 | Value | Count | % |
 |-------|-------|---|
-| Alltown Fresh | 201,423 | 98.97% |
-| Alltown Neighborhood Perks | 1,270 | 0.62% |
-| Alltown Fresh - DEVELOPMENT | 826 | 0.41% |
+| Retail Restaurant | 201,423 | 98.97% |
+| Retail Restaurant Neighborhood Perks | 1,270 | 0.62% |
+| Retail Restaurant - DEVELOPMENT | 826 | 0.41% |
 
 #### Top 10 RESTAURANT_ID Distribution
 | RESTAURANT_ID | Orders | % |
@@ -306,7 +306,7 @@ Single test restaurant used across 3 years. **Must filter out entirely.**
 | Date range | 2021-07-06 to 2023-03-13 |
 | Loyalty rate | **0%** (none are loyalty) |
 
-Separate program from main Alltown Fresh. Zero loyalty overlap.
+Separate program from main Retail Restaurant. Zero loyalty overlap.
 
 ### 4.6 Time-of-Day Pattern (UTC)
 
@@ -362,13 +362,13 @@ Hour    Orders     %   Distribution
 
 | Price | Qty | Extended ($) | Item | Category | App |
 |-------|-----|-------------|------|----------|-----|
-| $5,000 | 500 | $2,500,000 | Korean Kimchi | Bowls | Alltown Fresh |
-| $3,567 | 300 | $1,070,100 | Chili Chicken Bowl | Bowls | Alltown Fresh |
-| $3,500 | 500 | $1,750,000 | Meet Your Matcha 12oz | Smoothies | Alltown Fresh |
-| $2,967 | 300 | $890,100 | B.L.A.T | Sandwiches | Alltown Fresh |
-| $1,917 | 213 | $408,321 | Tuscan Sun | Salads | Alltown Fresh |
-| $1,403 | 118 | $165,556 | Carolina Pulled Pork | Sandwiches | Alltown Fresh |
-| $1,125 | 500 | $562,500 | Espresso Double | Espresso | Alltown Fresh |
+| $5,000 | 500 | $2,500,000 | Korean Kimchi | Bowls | Retail Restaurant |
+| $3,567 | 300 | $1,070,100 | Chili Chicken Bowl | Bowls | Retail Restaurant |
+| $3,500 | 500 | $1,750,000 | Meet Your Matcha 12oz | Smoothies | Retail Restaurant |
+| $2,967 | 300 | $890,100 | B.L.A.T | Sandwiches | Retail Restaurant |
+| $1,917 | 213 | $408,321 | Tuscan Sun | Salads | Retail Restaurant |
+| $1,403 | 118 | $165,556 | Carolina Pulled Pork | Sandwiches | Retail Restaurant |
+| $1,125 | 500 | $562,500 | Espresso Double | Espresso | Retail Restaurant |
 | $1,001 | 1 | $1,001 | Dora's Chicken Picatta | Bowls | DEVELOPMENT |
 
 **Revenue Impact:**
@@ -432,7 +432,7 @@ After cleaning: **40 categories** (down from 45).
 
 | Filter | Rows Affected | % |
 |--------|---------------|---|
-| APP_NAME = "Alltown Fresh - DEVELOPMENT" | 826 | 0.41% |
+| APP_NAME = "Retail Restaurant - DEVELOPMENT" | 826 | 0.41% |
 | ITEM_CATEGORY = "Test Items" | 1 | 0.00% |
 | RESTAURANT_ID = 6050e76361e498ca740bba6f (dev only) | 826 | 0.41% |
 

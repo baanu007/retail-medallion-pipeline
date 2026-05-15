@@ -72,8 +72,8 @@ against Silver — so Silver must be **clean, typed, and analytics-ready**.
 
 ## 3. Job 1: `clean-order-items.py`
 
-**Source**: `s3://globalpartners-aws/bronze/order_items/`
-**Target**: `s3://globalpartners-aws/silver/order_items/`
+**Source**: `s3://<BUCKET_NAME>/bronze/order_items/`
+**Target**: `s3://<BUCKET_NAME>/silver/order_items/`
 **Merge key**: `ORDER_ID + LINEITEM_ID`
 **Strategy**: Delta MERGE (upsert)
 
@@ -81,7 +81,7 @@ against Silver — so Silver must be **clean, typed, and analytics-ready**.
 | Step | Operation | Rows Removed (est.) |
 |---|---|---|
 | 1 | Read Bronze Delta (203,519 rows) | — |
-| 2 | Filter `APP_NAME != "Alltown Fresh - DEVELOPMENT"` | ~826 |
+| 2 | Filter `APP_NAME != "Retail Restaurant - DEVELOPMENT"` | ~826 |
 | 3 | Filter `RESTAURANT_ID != "6050e76361e498ca740bba6f"` | (overlaps with #2) |
 | 4 | Filter `ITEM_CATEGORY != "Test Items"` | 1 |
 | 5 | Drop NULL `ORDER_ID` / `LINEITEM_ID` | ≤1 |
@@ -121,8 +121,8 @@ against Silver — so Silver must be **clean, typed, and analytics-ready**.
 
 ## 4. Job 2: `clean-order-item-options.py`
 
-**Source**: `s3://globalpartners-aws/bronze/order_item_options/`
-**Target**: `s3://globalpartners-aws/silver/order_item_options/`
+**Source**: `s3://<BUCKET_NAME>/bronze/order_item_options/`
+**Target**: `s3://<BUCKET_NAME>/silver/order_item_options/`
 **Merge key**: `ORDER_ID + LINEITEM_ID + OPTION_GROUP_NAME + OPTION_NAME`
 **Strategy**: Delta MERGE (upsert)
 
@@ -168,8 +168,8 @@ to compute:
 
 ## 5. Job 3: `clean-date-dim.py`
 
-**Source**: `s3://globalpartners-aws/bronze/date_dim/`
-**Target**: `s3://globalpartners-aws/silver/date_dim/`
+**Source**: `s3://<BUCKET_NAME>/bronze/date_dim/`
+**Target**: `s3://<BUCKET_NAME>/silver/date_dim/`
 **Strategy**: Full OVERWRITE (365 rows, tiny table)
 
 ### Specific operations
@@ -238,7 +238,7 @@ Every Silver script adheres to the 7 standards established on 2026-04-11:
 ## 8. Deployment + Run Results (DONE)
 
 ### Deployment steps executed
-1. **Uploaded all 3 scripts** to `s3://globalpartners-aws/scripts/` via `aws s3 cp`.
+1. **Uploaded all 3 scripts** to `s3://<BUCKET_NAME>/scripts/` via `aws s3 cp`.
 2. **Created 3 Glue jobs** via `aws glue create-job` with `--cli-input-json` payloads
    (avoided the hidden-tab bug by using file-based JSON instead of the console).
    Job configs saved in `glue_jobs/silver/_deploy/*.json` for reproducibility.
@@ -291,7 +291,7 @@ truly the same option group), so no data loss — but worth remembering for Gold
 
 ### Data landed in S3 (verified)
 ```
-s3://globalpartners-aws/silver/
+s3://<BUCKET_NAME>/silver/
 ├── order_items/
 │   ├── _delta_log/00000000000000000000.json       (10 KB)
 │   └── ingestion_date=2026-04-11/
@@ -311,7 +311,7 @@ s3://globalpartners-aws/silver/
     └── ingestion_date=2026-04-11/
         └── part-00000-*.snappy.parquet            (7 KB)
 
-s3://globalpartners-aws/manifests/
+s3://<BUCKET_NAME>/manifests/
 ├── clean-date-dim/2026-04-11/status.json          (overall_status: SUCCESS)
 ├── clean-order-items/2026-04-11/status.json       (overall_status: SUCCESS)
 └── clean-order-item-options/2026-04-11/status.json (overall_status: SUCCESS)

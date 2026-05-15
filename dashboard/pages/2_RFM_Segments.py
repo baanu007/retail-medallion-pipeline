@@ -153,4 +153,4 @@ seg_stats["median_monetary"] = seg_stats["median_monetary"].astype(float).round(
 seg_stats["total_monetary"]  = seg_stats["total_monetary"].astype(float).round(2)
 st.dataframe(seg_stats, use_container_width=True, hide_index=True)
 
-st.caption("Source: `s3://globalpartners-aws/gold/gold_rfm_segments/` — F and M use a rolling 12-month window.")
+st.caption("Source: `s3://<BUCKET_NAME>/gold/gold_rfm_segments/` — F and M use a rolling 12-month window.")

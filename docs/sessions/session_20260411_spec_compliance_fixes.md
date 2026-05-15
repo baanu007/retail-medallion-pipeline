@@ -5,7 +5,7 @@
 
 ## TL;DR
 
-Cross-verified every bullet in `GlobalPartners_Business_Analysis_Requirements.docx`
+Cross-verified every bullet in `Business_Analysis_Requirements.docx`
 (Step 5 metrics and Step 6 dashboards) against our implementation. Found 3
 critical gaps + 1 medium gap + noted 3 low/optional items. Fixed all 4
 non-cosmetic gaps at the Gold layer and in the dashboard. Metric 6 (Pricing
