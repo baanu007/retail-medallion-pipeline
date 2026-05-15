@@ -180,7 +180,7 @@ PR integration).
 │       └── deploy-glue.yml            ← upload scripts + sync workflow on main
 │
 ├── architecture_v3.drawio             ← architecture diagram (draw.io source)
-├── architecture_v3.jpg                ← architecture diagram (image export)
+├── architecture_v3.md                 ← diagram regeneration instructions
 ├── date_dim.csv                       ← small reference date dimension
 │
 ├── docs/
